@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>WebXR HTTPS 事前検証</title>
+<style>
+  body { font-family: sans-serif; margin: 2em auto; max-width: 720px; line-height: 1.6; }
+  h1 { font-size: 1.4em; }
+  .ok { color: #0a7a2f; font-weight: bold; }
+  .ng { color: #b00020; font-weight: bold; }
+  #log { background: #f4f4f4; padding: .8em; white-space: pre-wrap; font-size: .9em; }
+  button { font-size: 1.2em; padding: .6em 1.4em; margin: 1em 0; }
+  canvas { width: 1px; height: 1px; }
+</style>
+</head>
+<body>
+<h1>WebXR HTTPS 事前検証 (推奨A: mkcert + LAN HTTPS)</h1>
+<ul id="diag"></ul>
+<button id="vr" disabled>immersive-vr セッション開始</button>
+<div id="result"></div>
+<pre id="log"></pre>
+<canvas id="c"></canvas>
+<script>
+const logEl = document.getElementById('log');
+const log = m => { logEl.textContent += m + '\n'; console.log(m); };
+const diagEl = document.getElementById('diag');
+const items = [];
+function d(name, val, pass) {
+  items.push({ name, val, pass });
+  const li = document.createElement('li');
+  li.textContent = name + ': ' + val;
+  li.className = pass === true ? 'ok' : (pass === false ? 'ng' : '');
+  diagEl.appendChild(li);
+}
+
+d('接続 URL', location.href);
+d('プロトコル', location.protocol, location.protocol === 'https:');
+d('isSecureContext', String(window.isSecureContext), window.isSecureContext === true);
+d('navigator.xr', String(!!navigator.xr), !!navigator.xr);
+
+(async () => {
+  if (navigator.xr) {
+    try {
+      const ok = await navigator.xr.isSessionSupported('immersive-vr');
+      d('isSessionSupported(immersive-vr)', String(ok), ok);
+      if (ok) document.getElementById('vr').disabled = false;
+    } catch (e) {
+      d('isSessionSupported(immersive-vr)', 'ERROR: ' + e, false);
+    }
+  }
+})();
+
+let session = null;
+let frameCount = 0;
+
+document.getElementById('vr').addEventListener('click', async () => {
+  const resultEl = document.getElementById('result');
+  resultEl.textContent = '';
+  try {
+    const canvas = document.getElementById('c');
+    const gl = canvas.getContext('webgl', { xrCompatible: true });
+    if (!gl) { log('ERROR: WebGL context 取得失敗'); return; }
+    await gl.makeXRCompatible();
+    log('requestSession(immersive-vr) ...');
+    session = await navigator.xr.requestSession('immersive-vr', {
+      optionalFeatures: ['local-floor']
+    });
+    log('セッション開始: mode=' + session.mode);
+    const layer = new XRWebGLLayer(session, gl);
+    session.updateRenderState({ baseLayer: layer });
+    let refSpace;
+    try {
+      refSpace = await session.requestReferenceSpace('local-floor');
+      log('reference space: local-floor');
+    } catch (e) {
+      refSpace = await session.requestReferenceSpace('local');
+      log('reference space: local (local-floor 不可)');
+    }
+    frameCount = 0;
+    const onFrame = (t, frame) => {
+      if (!session) return;
+      session.requestAnimationFrame(onFrame);
+      const pose = frame.getViewerPose(refSpace);
+      const l = frame.session.renderState.baseLayer;
+      gl.bindFramebuffer(gl.FRAMEBUFFER, l.framebuffer);
+      gl.clearColor(0.05, 0.35, 0.85, 1.0);
+      gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+      if (pose) {
+        for (const view of pose.views) {
+          const vp = l.getViewport(view);
+          gl.viewport(vp.x, vp.y, vp.width, vp.height);
+        }
+        if (frameCount === 0) log('初回 viewer pose OK (views=' + pose.views.length + ')');
+      }
+      frameCount++;
+      if (frameCount === 120) {
+        log('120 XR フレーム描画 OK — immersive-vr 動作確認完了。セッションを終了します。');
+        session.end();
+      }
+    };
+    session.requestAnimationFrame(onFrame);
+    session.addEventListener('end', () => {
+      session = null;
+      const pass = frameCount >= 120;
+      log('セッション終了。描画フレーム数=' + frameCount);
+      resultEl.innerHTML = pass
+        ? '<p class="ok">✅ 検証成功: mkcert 証明書 (警告許可) の HTTPS 上で immersive-vr が動作しました。</p>'
+        : '<p class="ng">❌ セッションは開始したがフレーム描画が不足 (frames=' + frameCount + ')。</p>';
+    });
+  } catch (e) {
+    log('ERROR: ' + e);
+    resultEl.innerHTML = '<p class="ng">❌ セッション開始失敗: ' + e + '</p>';
+  }
+});
+</script>
+</body>
+</html>

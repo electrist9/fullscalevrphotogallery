@@ -1,0 +1,27 @@
+# コンテンツ・データ（再生成可能 / 個人データ）
+Photos/
+data/
+certs/
+
+# 環境・依存・キャッシュ
+.venv/
+.pnpm-store/
+node_modules/
+tools/node/
+tools/npm-cache/
+tools/mkcert.exe
+.tmp/
+
+# ポータブル版 git 本体
+PortableGit/
+
+# ビルド生成物
+web/dist/
+web/tsconfig.tsbuildinfo
+
+# Python キャッシュ
+__pycache__/
+.pytest_cache/
+
+# ハーネス生成物
+.acl-recovery/
