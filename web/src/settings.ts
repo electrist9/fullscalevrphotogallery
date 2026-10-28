@@ -39,3 +39,37 @@ export function getScrollRadPerSec(): number {
 export function setScrollRadPerSec(rps: number): void {
   localStorage.setItem(SCROLL_KEY, String(rps));
 }
+
+// 詳細画像の表示距離 (m): 2026-10-28 要望 — 原寸大全身 / 原寸大半身 / フィットの3種を個別設定（0.50〜5.00、XR設定パネルで変更可・localStorage保存）
+export const DIST_MIN = 0.5;
+export const DIST_MAX = 5.0;
+export const DIST_LIFE_FULL_DEFAULT = 1.0; // 現状の LIFE_DIST と同じ
+export const DIST_LIFE_HALF_DEFAULT = 1.0; // 現状の LIFE_DIST と同じ
+export const DIST_FIT_DEFAULT = 2.4; // 現状の DETAIL_DIST と同じ
+const DIST_FULL_KEY = "fsvg.distLifeFullM";
+const DIST_HALF_KEY = "fsvg.distLifeHalfM";
+const DIST_FIT_KEY = "fsvg.distFitM";
+
+function getDistM(key: string, def: number): number {
+  const v = parseFloat(localStorage.getItem(key) ?? "");
+  return Number.isFinite(v) && v >= DIST_MIN && v <= DIST_MAX ? v : def;
+}
+
+export function getDistLifeFullM(): number {
+  return getDistM(DIST_FULL_KEY, DIST_LIFE_FULL_DEFAULT);
+}
+export function setDistLifeFullM(m: number): void {
+  localStorage.setItem(DIST_FULL_KEY, String(m));
+}
+export function getDistLifeHalfM(): number {
+  return getDistM(DIST_HALF_KEY, DIST_LIFE_HALF_DEFAULT);
+}
+export function setDistLifeHalfM(m: number): void {
+  localStorage.setItem(DIST_HALF_KEY, String(m));
+}
+export function getDistFitM(): number {
+  return getDistM(DIST_FIT_KEY, DIST_FIT_DEFAULT);
+}
+export function setDistFitM(m: number): void {
+  localStorage.setItem(DIST_FIT_KEY, String(m));
+}

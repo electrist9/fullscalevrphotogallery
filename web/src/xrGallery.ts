@@ -4,11 +4,11 @@
 // 移動: 左スティック=スムース移動、右スティック=スナップターン。
 // 詳細表示中: トリガー=一覧に戻る、右スティック左右=次/前の画像（スナップターン停止）、左Xボタン=情報ラベル表示/非表示（デフォルト非表示）。
 // M3アルバム整理: Photos/サブフォルダ=アルバム。上部チップ行で切替、グリッドは選択中アルバムのみ。
-// XR設定: チップ行末尾の「⚙ 設定」で設定パネルを開く。写真推定IPD（mm）・半身の目の高さ（m）・スクロール速度（rad/s）をボタンで調整・localStorage保存。
+// XR設定: チップ行末尾の「⚙ 設定」で設定パネルを開く。写真推定IPD（mm）・半身の目の高さ（m）・スクロール速度（rad/s）・詳細表示距離（m: 原寸大全身/原寸大半身/フィット）をボタンで調整・localStorage保存。
 import * as THREE from "three";
 import type { Photo } from "./api";
 import { planeSizeMm } from "./photoPlane";
-import { getIpdMm, setIpdMm, getEyeLifeM, setEyeLifeM, EYE_LIFE_MIN, EYE_LIFE_MAX, getScrollRadPerSec, setScrollRadPerSec, SCROLL_DEFAULT, SCROLL_MIN, SCROLL_MAX } from "./settings";
+import { getIpdMm, setIpdMm, getEyeLifeM, setEyeLifeM, EYE_LIFE_MIN, EYE_LIFE_MAX, getScrollRadPerSec, setScrollRadPerSec, SCROLL_DEFAULT, SCROLL_MIN, SCROLL_MAX, getDistLifeFullM, setDistLifeFullM, getDistLifeHalfM, setDistLifeHalfM, getDistFitM, setDistFitM, DIST_MIN, DIST_MAX, DIST_LIFE_FULL_DEFAULT, DIST_LIFE_HALF_DEFAULT, DIST_FIT_DEFAULT } from "./settings";
 import { createControllerRig, controllerRay, setRayLength, onControllerEvent, Locomotion } from "./xr-input";
 
 const R = 3.4; // パネル配置半径 (m)
@@ -16,9 +16,8 @@ const PANEL_H = 0.42; // サムパネル高さ (m)
 const PANEL_GAP = 0.14;
 const ROW_Y = 1.3; // 2026-10-28 要望: ギャラリー1段化（旧3段 [1.3, 1.8, 2.3]）
 const EYE_Y = 1.5; // フィット表示の中心高さ (m)
-const DETAIL_DIST = 2.4; // フィット表示の距離 (m)
+const DETAIL_DIST = 2.4; // 詳細 root の頭からのアンカー距離 (m)。実際の写真距離は photoGroup のオフセット（設定値）で作る（2026-10-28: 距離は設定パネルで3種個別可変化）
 const DETAIL_FIT = 2.2; // フィット表示の最大辺 (m)
-const LIFE_DIST = 1.0; // 原寸大: 視聴距離 (m、§4.2既定2.0m→Quest実機体感で1.0mに調整)
 const NAV_COOLDOWN = 0.5; // 詳細表示中の右スティック画像切替クールダウン (秒)
 // 2026-10-28 要望: アルバムチップをテキストボタン→アルバム先頭画像のサムネイル化。行はギャラリー上（旧2段目 y=1.8）。
 // ギャラリー上端1.51m / チップ画像 1.66〜1.94m / 名下ラベル下端≈1.59m で干渉なし。枚数増時はギャラリーと同じ連続スクロール。
@@ -77,6 +76,7 @@ interface Detail {
   hM: number;
   lifeSize: boolean; // 原寸大可能か
   feetOnFloor: boolean; // 原寸大で画像内の足元(sole_y)が床接地（接地ガイドを出すか）
+  distM: number; // 開いたときに適用された表示距離 (m)。情報ラベル表示用
 }
 
 export async function startXRGallery(photos: Photo[], initialAlbum: string | null = null): Promise<void> {
@@ -84,6 +84,12 @@ export async function startXRGallery(photos: Photo[], initialAlbum: string | nul
   let ipdMm = getIpdMm(); // 写真推定IPD (mm)。XR設定パネルで変更・localStorage保存（settings.ts）
   let eyeLifeM = getEyeLifeM(); // 半身原寸大の目の高さ (m)。XR設定パネルで変更・localStorage保存（2026-10-26 要望）
   let scrollSpeed = getScrollRadPerSec(); // 2026-10-28 要望: 右スティック最大倒し時のスクロール角速度 (rad/s)。設定パネルで変更可・localStorage保存
+  // 2026-10-28 要望: 詳細画像の表示距離 (m) を3種個別に設定可能に（0.50〜5.00・localStorage保存）。
+  // 全身=sole_y検出で足元床接地、半身=原寸大でsole_yなし（目線を eyeLifeM 固定）、フィット=原寸大不可のフォールバック。
+  // 変更は次に写真を開いたときから反映（openDetail 時点で読む）。
+  let distLifeFullM = getDistLifeFullM();
+  let distLifeHalfM = getDistLifeHalfM();
+  let distFitM = getDistFitM();
   const session = await navigator.xr.requestSession("immersive-vr", {
     requiredFeatures: ["local-floor"],
     optionalFeatures: ["bounded-floor", "hand-tracking"],
@@ -451,8 +457,8 @@ export async function startXRGallery(photos: Photo[], initialAlbum: string | nul
     const sc = planeSizeMm(d.photo, ipdMm);
     const flag = sc.clamped ? " ⚠推定に自信なし" : sc.lifeSize ? "" : " ⚠原寸大不可";
     const modeLine = !d.lifeSize
-      ? "フィット表示（原寸大不可: 顔なし/低信頼） ・ トリガー=一覧に戻る ・ 右スティック=次/前 ・ Xボタン=情報表示/非表示"
-      : `モード: 原寸大（${d.feetOnFloor ? "足元=床接地" : `目の高さ${eyeLifeM.toFixed(2)}m`}） ・ トリガー=一覧に戻る ・ 右スティック=次/前 ・ Xボタン=情報表示/非表示`;
+      ? `フィット表示（原寸大不可: 顔なし/低信頼）・距離${d.distM.toFixed(2)}m ・ トリガー=一覧に戻る ・ 右スティック=次/前 ・ Xボタン=情報表示/非表示`
+      : `モード: 原寸大（${d.feetOnFloor ? "足元=床接地" : `目の高さ${eyeLifeM.toFixed(2)}m`}）・距離${d.distM.toFixed(2)}m ・ トリガー=一覧に戻る ・ 右スティック=次/前 ・ Xボタン=情報表示/非表示`;
     return [
       d.photo.album ? `${d.photo.filename}（📁 ${d.photo.album}）` : d.photo.filename,
       `原寸 ${d.wM.toFixed(2)}×${d.hM.toFixed(2)}m${sc.heightM != null ? ` ・ 身長推定 ${sc.heightM.toFixed(2)}m（頭頂→足元）` : ""} ・ mm/px=${sc.mmPerPx.toFixed(4)} ・ ${sc.source}${flag}`,
@@ -472,6 +478,7 @@ export async function startXRGallery(photos: Photo[], initialAlbum: string | nul
     // 足元未検出（半身等）は目線を eyeLifeM（デフォルト1.45m、XR設定パネルで変更可）に固定。
     let lifeY: number;
     let feetOnFloor = false;
+    let halfBody = false;
     if (sc.lifeSize && sc.soleYpx != null) {
       const belowSoleM = ((photo.height - sc.soleYpx) * sc.mmPerPx) / 1000; // 足元→画像下端 (m)
       lifeY = hM / 2 - belowSoleM; // sole_y の位置が y=0 になる
@@ -479,13 +486,18 @@ export async function startXRGallery(photos: Photo[], initialAlbum: string | nul
     } else if (sc.lifeSize && sc.eyeYpx != null) {
       const eyeFromBottomM = ((photo.height - sc.eyeYpx) * sc.mmPerPx) / 1000;
       lifeY = eyeLifeM - eyeFromBottomM + hM / 2; // 半身: 目線を eyeLifeM に固定
+      halfBody = true;
     } else {
       lifeY = hM / 2 + 0.05;
     }
 
     // M3: 選択画面から原寸大で開く（原寸大不可＝フォールバック写真のみフィット表示で開く）
     const startLife = sc.lifeSize;
-    const startZ = startLife ? DETAIL_DIST - LIFE_DIST : 0;
+    // 2026-10-28 要望: 表示距離を全身/半身/フィットの3モード個別に設定（設定パネル・0.50〜5.00m）。
+    // root は DETAIL_DIST に固定アンカーし、photoGroup のオフセット startZ = DETAIL_DIST − distM で実距離 distM を作る。
+    // 床折り曲げストリップ・接地ガイド・情報ラベルは startZ に連動済みなので追従する。
+    const distM = feetOnFloor ? distLifeFullM : halfBody ? distLifeHalfM : distFitM;
+    const startZ = DETAIL_DIST - distM;
 
     // 2026-10-26: 原寸大全身表示で足元より下の余白（sole_y→画像下端）を折り曲げ、床面に平置きする
     // （写真の地面が部屋へ続く見せ方）。主プレインは sole_y→画像上端のみを映し、余白ストリップは
@@ -555,6 +567,7 @@ export async function startXRGallery(photos: Photo[], initialAlbum: string | nul
       label: new THREE.Mesh(),
       photo, wM, hM,
       lifeSize: sc.lifeSize, feetOnFloor,
+      distM,
     };
 
     d.label = makeLabel(detailLines(d), Math.min(Math.max(wM, 0.9), 1.7));
@@ -600,7 +613,9 @@ export async function startXRGallery(photos: Photo[], initialAlbum: string | nul
 
   // 2026-10-26: XR設定パネル（PLAN §5④）。「IPD」だとHMD側のIPDと誤解されるためラベルは「写真推定IPD」。
   // 2026-10-26 要望: 「半身の目の高さ」(EYE_LIFE) もパネルで変更可（1.00〜2.00m、±1/±5cm、localStorage保存）。
-  // 2026-10-28 要望: 「スクロール速度」(0.4〜3.0 rad/s、±0.1/±0.4、localStorage保存) も追加。IPD/目の高さは次に写真を開いたときから反映、スクロール速度は次フレームから即反映。
+  // 2026-10-28 要望: 「スクロール速度」(0.4〜3.0 rad/s、±0.1/±0.4、localStorage保存) も追加。
+  // 2026-10-28 要望: 「詳細表示距離」を 原寸大全身/原寸大半身/フィット の3種追加（0.50〜5.00m、±0.1/±0.5、localStorage保存）。
+  // IPD/目の高さ/表示距離は次に写真を開いたときから反映、スクロール速度は次フレームから即反映。
   // 値はボタンで調整（VRにキーボードはない）。変更は次に写真を開いたときから反映（openDetail 時点で ipdMm/eyeLifeM を読む）。
   let settings: SettingsPanel | null = null;
 
@@ -610,7 +625,9 @@ export async function startXRGallery(photos: Photo[], initialAlbum: string | nul
     ctx.fillStyle = "rgba(20,22,26,0.92)";
     ctx.fillRect(0, 0, c.width, c.height);
     ctx.textBaseline = "top";
-    // 並び順（2026-10-26 要望 / 2026-10-28 スクロール速度追加）: タイトル → 操作説明 → IPDラベル → [IPDボタン行] → 目の高さラベル → [目の高さボタン行] → スクロール速度ラベル → [速度ボタン行]
+    // 並び順（2026-10-26 要望 / 2026-10-28 スクロール速度・詳細表示距離3種追加）:
+    // タイトル → 操作説明 → IPD → [IPDボタン行] → 目の高さ → [目の高さボタン行] → スクロール速度 → [速度ボタン行]
+    // → 原寸大全身距離 → [行] → 原寸大半身距離 → [行] → フィット距離 → [行]
     // ボタン行は Canvas の隙間に重ねて配置（openSettings の y 対応: 1px = bodyH/canvas.height m）
     ctx.fillStyle = "#e8eaed";
     ctx.font = "44px system-ui, sans-serif";
@@ -623,6 +640,9 @@ export async function startXRGallery(photos: Photo[], initialAlbum: string | nul
     ctx.fillText(`写真推定IPD: ${ipdMm.toFixed(1)} mm（50〜80）`, 24, 126);
     ctx.fillText(`半身の目の高さ: ${eyeLifeM.toFixed(2)} m（1.00〜2.00）`, 24, 300);
     ctx.fillText(`スクロール速度: ${scrollSpeed.toFixed(1)} rad/s（0.4〜3.0）`, 24, 474);
+    ctx.fillText(`原寸大全身の距離: ${distLifeFullM.toFixed(2)} m（0.50〜5.00）`, 24, 648);
+    ctx.fillText(`原寸大半身の距離: ${distLifeHalfM.toFixed(2)} m（0.50〜5.00）`, 24, 822);
+    ctx.fillText(`フィット表示の距離: ${distFitM.toFixed(2)} m（0.50〜5.00）`, 24, 996);
     sp.bodyTex.needsUpdate = true;
   };
 
@@ -639,7 +659,7 @@ export async function startXRGallery(photos: Photo[], initialAlbum: string | nul
 
     const canvas = document.createElement("canvas");
     canvas.width = 1024;
-    canvas.height = 640; // 2026-10-28: スクロール速度行の追加で 480→640（1px=0.001172m は幅固定なので不変）
+    canvas.height = 1152; // 2026-10-28: 詳細表示距離3行の追加で 640→1152（幅1.2m固定なので 1px=0.001172m は不変）
     const tex = new THREE.CanvasTexture(canvas);
     tex.colorSpace = THREE.SRGBColorSpace;
     tex.anisotropy = 4;
@@ -679,8 +699,9 @@ export async function startXRGallery(photos: Photo[], initialAlbum: string | nul
         buttons.push({ group: g, mesh: face, frameMat, action });
       });
     };
-    // ボタン行の y は Canvas 上の隙間に対応（本文中心0.1・bodyH=0.75・上端0.475・1px=0.001172m）:
-    // 1行目=IPD（キャンバスy230付近）、2行目=半身の目の高さ（キャンバスy408付近）、3行目=スクロール速度（キャンバスy576付近・2026-10-28追加）
+    // ボタン行の y は Canvas 上の隙間に対応（本文中心0.1・bodyH=1.35・上端0.775・1px=0.001172m・キャンバス中心y576）:
+    // 1行目=IPD（y230）、2行目=半身の目の高さ（y408）、3行目=スクロール速度（y576）、
+    // 4〜6行目=詳細表示距離 全身/半身/フィット（y750/924/1098・2026-10-28追加）
     addButtonRow(
       [
         ["−1.0", "ipd_minus1"], // 2026-10-26 要望: 「−1」→「−1.0」表記（0.5刻みと揃える）
@@ -689,7 +710,7 @@ export async function startXRGallery(photos: Photo[], initialAlbum: string | nul
         ["+1.0", "ipd_plus1"], // 2026-10-26 要望: 「+1」→「+1.0」表記
         ["初期化", "ipd_reset"],
       ],
-      0.205,
+      0.505,
     );
     addButtonRow(
       [
@@ -699,7 +720,7 @@ export async function startXRGallery(photos: Photo[], initialAlbum: string | nul
         ["+5cm", "eye_plus5"],
         ["実測", "eye_measure"], // 2026-10-26 要望: 「初期化」→「実測」。HMDの床からの高さを自動入力（local-floor基準）
       ],
-      -0.003,
+      0.297,
     );
     addButtonRow(
       [
@@ -709,7 +730,39 @@ export async function startXRGallery(photos: Photo[], initialAlbum: string | nul
         ["+0.4", "scroll_plus04"],
         ["初期化", "scroll_reset"], // 2026-10-28 要望: ギャラリー連続スクロール速度（rad/s）を調整。変更は次フレームから即反映
       ],
-      -0.2,
+      0.1,
+    );
+    // 2026-10-28 要望: 詳細画像の表示距離（m）。全身=sole_y検出、半身=原寸大でsole_yなし、フィット=原寸大不可。
+    // 変更は次に写真を開いたときから反映（openDetail 時点で読む）
+    addButtonRow(
+      [
+        ["−0.5", "distfull_minus05"],
+        ["−0.1", "distfull_minus01"],
+        ["+0.1", "distfull_plus01"],
+        ["+0.5", "distfull_plus05"],
+        ["初期化", "distfull_reset"],
+      ],
+      -0.109,
+    );
+    addButtonRow(
+      [
+        ["−0.5", "disthalf_minus05"],
+        ["−0.1", "disthalf_minus01"],
+        ["+0.1", "disthalf_plus01"],
+        ["+0.5", "disthalf_plus05"],
+        ["初期化", "disthalf_reset"],
+      ],
+      -0.313,
+    );
+    addButtonRow(
+      [
+        ["−0.5", "distfit_minus05"],
+        ["−0.1", "distfit_minus01"],
+        ["+0.1", "distfit_plus01"],
+        ["+0.5", "distfit_plus05"],
+        ["初期化", "distfit_reset"],
+      ],
+      -0.517,
     );
 
     const sp: SettingsPanel = { root, bodyCanvas: canvas, bodyTex: tex, buttons };
@@ -721,7 +774,7 @@ export async function startXRGallery(photos: Photo[], initialAlbum: string | nul
     const yaw = player.rotation.y;
     const fwd = new THREE.Vector3(-Math.sin(yaw), 0, -Math.cos(yaw));
     root.position.copy(head).addScaledVector(fwd, SETTINGS_DIST);
-    root.position.y = 1.38; // 縦長パネル（2026-10-26 並び順変更）で上下の余白を調整
+    root.position.y = 1.15; // 6行化（bodyH=1.35）で上端≈1.93m/下端≈0.58m になるよう調整（旧3行・1.38から下げた）
     root.rotation.y = yaw;
     scene.add(root);
     settings = sp;
@@ -759,6 +812,26 @@ export async function startXRGallery(photos: Photo[], initialAlbum: string | nul
       else if (action === "scroll_plus04") scrollSpeed = clamp(scrollSpeed + 0.4);
       else if (action === "scroll_reset") scrollSpeed = SCROLL_DEFAULT;
       setScrollRadPerSec(scrollSpeed);
+    } else if (action.startsWith("distfull_") || action.startsWith("disthalf_") || action.startsWith("distfit_")) {
+      // 2026-10-28 要望: 詳細画像の表示距離（m、0.50〜5.00、±0.1/±0.5）。全身/半身/フィットの3種。
+      // 変数は openDetail で読まれるので、変更は次に写真を開いたときから反映（IPD・目の高さと同じ）
+      const clamp = (v: number) => Math.min(DIST_MAX, Math.max(DIST_MIN, Math.round(v * 100) / 100));
+      const kind = action.slice(4, action.indexOf("_", 4)); // full / half / fit
+      const delta =
+        action.endsWith("minus05") ? -0.5 :
+        action.endsWith("minus01") ? -0.1 :
+        action.endsWith("plus01") ? 0.1 :
+        action.endsWith("plus05") ? 0.5 : 0;
+      if (kind === "full") {
+        distLifeFullM = action.endsWith("reset") ? DIST_LIFE_FULL_DEFAULT : clamp(distLifeFullM + delta);
+        setDistLifeFullM(distLifeFullM);
+      } else if (kind === "half") {
+        distLifeHalfM = action.endsWith("reset") ? DIST_LIFE_HALF_DEFAULT : clamp(distLifeHalfM + delta);
+        setDistLifeHalfM(distLifeHalfM);
+      } else {
+        distFitM = action.endsWith("reset") ? DIST_FIT_DEFAULT : clamp(distFitM + delta);
+        setDistFitM(distFitM);
+      }
     }
     if (settings) drawSettingsBody(settings);
   };
