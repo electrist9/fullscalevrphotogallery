@@ -1020,7 +1020,9 @@ function buildRoom(scene: THREE.Scene): void {
   scene.add(floor);
 
   const grid = new THREE.GridHelper((R + 3.5) * 2, 28, 0x2c3038, 0x1d2025);
-  grid.position.y = 0.002;
+  // 2026-10-28 実機指摘: 床折り曲げストリップ（y=0.002）と同一高さでZ-fightingし、
+  // グリッド線が写真ストリップの上に見えた。グリッドを1mm下げてストリップを確実に上に（深度精度はµm規模で1mm差は十分）
+  grid.position.y = 0.001;
   scene.add(grid);
 
   const wall = new THREE.Mesh(
