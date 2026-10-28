@@ -116,14 +116,17 @@ def migrate_thumb_files(con) -> int:
 
 def _needs_reindex(con, path, rel) -> bool:
     """差分再スキャン用: mtime/size が同じでサムネイルBLOBが存在すれば再スキャン不要。
+    ただし detect_ver（顔検出戦略バージョン）が現在の値と違う写真は再検出対象。
     （faces が 0 件の写真も photos 行の存在＝以前インデックス済みとみなしてスキップ）"""
     st = os.stat(path)
     row = con.execute(
-        "SELECT id, mtime, size_bytes FROM photos WHERE relpath = ?", (rel,)
+        "SELECT id, mtime, size_bytes, detect_ver FROM photos WHERE relpath = ?", (rel,)
     ).fetchone()
     if not row:
         return True
-    pid, mtime, size_bytes = row
+    pid, mtime, size_bytes, detect_ver = row
+    if detect_ver != facedetect.DETECT_VERSION:
+        return True
     if abs(mtime - st.st_mtime) > 1e-6 or size_bytes != st.st_size:
         return True
     if not con.execute("SELECT 1 FROM thumbs WHERE photo_id = ?", (pid,)).fetchone():
@@ -143,7 +146,8 @@ def index_photo(con, rel):
         # 足元検出（Pose）: 身長=頭頂→足元、原寸大表示の足先=床接地に使用。主顔のみに紐付け
         pose = facedetect.detect_pose(im) if faces else None
 
-    pid = db.upsert_photo(con, rel, filename, album, path, W, H, st.st_size, st.st_mtime, None)
+    pid = db.upsert_photo(con, rel, filename, album, path, W, H, st.st_size, st.st_mtime, None,
+                          detect_ver=facedetect.DETECT_VERSION)
     db.set_thumb(con, pid, thumb_bytes)
     if faces:
         faces.sort(key=lambda f: (f["bbox"][2] - f["bbox"][0]) * (f["bbox"][3] - f["bbox"][1]), reverse=True)

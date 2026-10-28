@@ -19,7 +19,8 @@ CREATE TABLE IF NOT EXISTS photos (
   size_bytes INTEGER NOT NULL,
   mtime REAL NOT NULL,
   thumb TEXT,
-  indexed_at REAL NOT NULL
+  indexed_at REAL NOT NULL,
+  detect_ver INTEGER          -- 顔検出戦略バージョン(facedetect.DETECT_VERSION)。不一致の写真のみ再検出
 );
 CREATE TABLE IF NOT EXISTS faces (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -34,7 +35,7 @@ CREATE TABLE IF NOT EXISTS faces (
   crown_y REAL,                 -- 頭頂推定 y (px)。身長=頭頂→足元に使用
   sole_y REAL,                  -- Pose検出の足元 y (px)。足先=床接地に使用。未検出は NULL
   height_mm REAL,               -- 身長 (mm) = (sole_y - crown_y) × mm/px。算出不可は NULL
-  method TEXT,                  -- full | top50 | top30 | 2x | none
+  method TEXT,                  -- full | top50 | top30 | tile3x3 | posecrop | none
   is_main INTEGER NOT NULL DEFAULT 0
 );
 CREATE TABLE IF NOT EXISTS thumbs (
@@ -64,6 +65,9 @@ def _migrate(con):
         con.execute("DROP TABLE IF EXISTS faces")
         con.execute("DROP TABLE IF EXISTS photos")
         con.executescript(SCHEMA)
+    cols = {r[1] for r in con.execute("PRAGMA table_info(photos)")}
+    if "detect_ver" not in cols:
+        con.execute("ALTER TABLE photos ADD COLUMN detect_ver INTEGER")
     # M2で追加した faces 列を既存DBへ後付け（ALTER TABLE）。
     cols = {r[1] for r in con.execute("PRAGMA table_info(faces)")}
     for name, typ in (
@@ -74,16 +78,18 @@ def _migrate(con):
             con.execute(f"ALTER TABLE faces ADD COLUMN {name} {typ}")
 
 
-def upsert_photo(con, relpath, filename, album, path, width, height, size_bytes, mtime, thumb):
+def upsert_photo(con, relpath, filename, album, path, width, height, size_bytes, mtime, thumb,
+                 detect_ver=None):
     con.execute(
-        """INSERT INTO photos (relpath, filename, album, path, width, height, size_bytes, mtime, thumb, indexed_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """INSERT INTO photos (relpath, filename, album, path, width, height, size_bytes, mtime, thumb, indexed_at, detect_ver)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
            ON CONFLICT(relpath) DO UPDATE SET
              filename=excluded.filename, album=excluded.album,
              path=excluded.path, width=excluded.width, height=excluded.height,
              size_bytes=excluded.size_bytes, mtime=excluded.mtime,
-             thumb=excluded.thumb, indexed_at=excluded.indexed_at""",
-        (relpath, filename, album, path, width, height, size_bytes, mtime, thumb, time.time()),
+             thumb=excluded.thumb, indexed_at=excluded.indexed_at,
+             detect_ver=excluded.detect_ver""",
+        (relpath, filename, album, path, width, height, size_bytes, mtime, thumb, time.time(), detect_ver),
     )
     cur = con.execute("SELECT id FROM photos WHERE relpath = ?", (relpath,))
     pid = cur.fetchone()[0]
