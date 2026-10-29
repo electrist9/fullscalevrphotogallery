@@ -1,6 +1,6 @@
 # TODO.md — 残作業・未決事項
 
-> 最終更新: 2026-10-29（main @ `bc4a071`）。完了済み項目は PLAN.md §2 変更履歴と PROJECT_STATE.md §2 を参照（这里是「やっていないこと」だけ）。
+> 最終更新: 2026-10-29（main @ `f34fdef`）。完了済み項目は PLAN.md §2 変更履歴と PROJECT_STATE.md §2 を参照（这里是「やっていないこと」だけ）。
 
 ## 1. M4「品質・配布」（進行中・次のマイルストーン）
 
@@ -8,10 +8,10 @@ PLAN.md §7 の M4 完了条件: **「初回セットアップ30分以内で動�
 **配布方針（2026-10-29 ユーザー決定）**: セルフホスト配布（LAN限定・認証なしの stance 不変。インターネット公開は対象外）。チャネルは **GitHubリポジトリ＋zipパッケージ** の両方。ライセンス **MIT**。README **日本語のみ**。zipは**スリム**（ソース＋models/＋ビルド済み web/dist＋セットアップスクリプト。ユーザーは Python 3.12 を導入済みであることが前提）。
 
 - [x] 公開前掃除（`Photos/_stress/` 削除・webxr-test 遺物削除・stale修正・テスト修正）→ `bc4a071` で完了。
-- [ ] **`scripts/setup.ps1` 実装**（初回セットアップ自動化）: Python 3.12 検出（無ければ案内）、`.venv` 作成、`pip install -r requirements.txt`、`setup-cert.ps1` 実行、`web/dist` が無ければ Node 自動DL→ビルド（zip配布ではビルド済み dist 同梱のため通常スキップ）。
-- [ ] **README.md 作成**（新規ユーザー向けセットアップ手順・日本語）: 前提（Windows PC／Quest 3／同一LAN／Python 3.12）、zip展開→`setup.ps1`→`start-server.ps1` の手順、mkcert ルートCA（`certs/caroot/rootCA.pem`）の **Quest 側への信頼登録手順**（実機で実際に通した手順を明記すること）、`config.json` の3キー（port/photos_root/album_mode）解説、非8443ポート時の Windows ファイアウォールルール（`netsh advfirewall firewall add rule name="FSVR Gallery <ポート>" dir=in action=allow protocol=TCP localport=<ポート>`、管理者）、Quest URL `https://<LAN-IP>:<ポート>/` の開き方、開発者向け（`build-web.ps1`・pytest）。
-- [ ] **LICENSE（MIT）作成**。
-- [ ] **`scripts/make-release.ps1` 実装**（スリムzip生成）: git追跡ファイル＋ビルド済み `web/dist` を含め、`Photos/` `data/` `certs/` `.venv/` `tools/node/` `node_modules/` `.pnpm-store/` `PortableGit/` `.tmp/` を除外。`fsvg-v<版>.zip` 出力。
+- [x] **`scripts/setup.ps1` 実装**（初回セットアップ自動化）→ feature/m4-distribution で完了。Python 3.12 検出（`py -3.12`→`python -V`、無ければ案内）、`.venv` 作成、`pip install --disable-pip-version-check`、`setup-cert.ps1` 実行、`web/dist` 無ければ Node 自動DL→ビルド。スモークテスト済み（冪等経路 exit 0）。
+- [x] **README.md 作成**（新規ユーザー向けセットアップ手順・日本語）→ feature/m4-distribution で完了。一次手順は**警告の「詳細情報」→「続行」**（実運用で確認済み。ユーザーが CA 未インストールと判明したため方針変更）。CA 信頼登録は任意・未検証の代替として併記。config.json 3キー・ファイアウォール・トラブルシューティング・セキュリティ注意含む。
+- [x] **LICENSE（MIT）作成** → © 2026 FullScale VR Photo Gallery contributors。
+- [x] **`scripts/make-release.ps1` 実装**（スリムzip生成）→ feature/m4-distribution で完了。git追跡ファイル＋ビルド済み `web/dist`、内部ドキュメント（PLAN/PROJECT_STATE/ARCHITECTURE/DECISIONS/TODO）除外。テスト実行 OK（`release/fsvg-v0.9.0.zip` 11.3MB）。
 - [ ] セットアップ手順の実測（まっさらな環境で30分以内の確認）。
 - [ ] 受け入れ基準 §9-3 の正式検証: **キャリブレーション人物基準で原寸大の身長表示誤差 ±5%以内** を実機で確認（`scripts/make_fixture.py` 生成の既知IPDキャリブ写真を使用。`server/tests/test_scale.py` の PC 側誤差テストは合格済み、実機での体感/表示値確認が未記録）。
 - [ ] GitHub リポジトリ作成・push・Release に zip 添付（GitHub アカウントはユーザー所有。push 認証手段をその時点で確認）。

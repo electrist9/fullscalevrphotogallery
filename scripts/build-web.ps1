@@ -1,4 +1,4 @@
-# web ビルド: workspace内 Node/pnpm を使って pnpm install + vite build
+﻿# web ビルド: workspace内 Node/pnpm を使って pnpm install + vite build
 # 使い方: powershell -File scripts\build-web.ps1
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot

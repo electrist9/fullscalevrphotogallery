@@ -18,6 +18,7 @@ PortableGit/
 # ビルド生成物
 web/dist/
 web/tsconfig.tsbuildinfo
+release/
 
 # Python キャッシュ
 __pycache__/

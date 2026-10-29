@@ -1,6 +1,6 @@
 # PROJECT_STATE.md — プロジェクト現在状態
 
-> 最終更新: 2026-10-29（Asia/Tokyo）／ 対象リポジトリ: `F:\fullscalevrphotogallery`（branch `main` @ `bc4a071`、作業ツリークリーン）
+> 最終更新: 2026-10-29（Asia/Tokyo）／ 対象リポジトリ: `F:\fullscalevrphotogallery`（branch `main` @ `f34fdef`、作業ツリークリーン）
 > 本ファイルは別セッションのLLMが開発を継続するための状態記録。設計詳細は ARCHITECTURE.md、決定理由は DECISIONS.md、残作業は TODO.md。履歴の正典は PLAN.md（変更履歴セクション）。
 
 ## 1. プロジェクト概要
@@ -14,7 +14,7 @@ PC上の写真フォルダを、Quest 3 の WebXRブラウザ（HMD単体・PC�
 
 ## 2. 現在の到達点（すべて Quest 3 実機確認済み）
 
-マイルストーン（PLAN.md §7）: **M0・M1・M2・M3 完了**。M4（品質・配布）未着手。M5（拡張）任意・未着手。
+マイルストーン（PLAN.md §7）: **M0・M1・M2・M3 完了**。M4（品質・配布）**進行中** — 公開前掃除と配布物一式（`scripts/setup.ps1`／README.md（日本語）／LICENSE（MIT）／`scripts/make-release.ps1`・スリムzip 11.3MB 生成確認済み）が完了。残は まっさら環境での30分実測、§9-3 実機 ±5% 検証、GitHub リポジトリ公開＋Release zip添付。M5（拡張）任意・未着手。
 
 実機確認済みの機能（詳細履歴は PLAN.md §2 変更履歴、各項目に「Quest 3 実機確認（日付、OK）」サブ項目あり）:
 

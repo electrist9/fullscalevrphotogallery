@@ -1,4 +1,4 @@
-# 証明書再生成スクリプト (推奨A: mkcert)
+﻿# 証明書再生成スクリプト (推奨A: mkcert)
 # PC の LAN IP が変わったときなどに、管理者権限なしで通常実行してください。
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
@@ -11,8 +11,18 @@ if (-not (Test-Path $mkcert)) {
   Invoke-WebRequest -Uri 'https://github.com/FiloSottile/mkcert/releases/download/v1.4.4/mkcert-v1.4.4-windows-amd64.exe' -OutFile $mkcert -UseBasicParsing
 }
 
-$ips = (Get-NetIPAddress -AddressFamily IPv4 |
-  Where-Object { $_.IPAddress -notlike '127.*' -and $_.IPAddress -notlike '169.254.*' -and $_.PrefixOrigin -ne 'WellKnown' }).IPAddress
+try {
+  $ips = @(Get-NetIPAddress -AddressFamily IPv4 |
+    Where-Object { $_.IPAddress -notlike '127.*' -and $_.IPAddress -notlike '169.254.*' -and $_.PrefixOrigin -ne 'WellKnown' } |
+    ForEach-Object { $_.IPAddress })
+} catch {
+  # CIM (Get-NetIPAddress) が使えない環境のフォールバック: .NET 経由でホスト名解決
+  $ips = @([System.Net.Dns]::GetHostAddresses([System.Net.Dns]::GetHostName()) |
+    Where-Object { $_.AddressFamily -eq 'InterNetwork' -and $_.IPAddressToString -notlike '127.*' -and $_.IPAddressToString -notlike '169.254.*' } |
+    ForEach-Object { $_.IPAddressToString })
+}
+$ips = @($ips | Select-Object -Unique)
+if ($ips.Count -eq 0) { Write-Error 'LAN IP を検出できませんでした。'; exit 1 }
 Write-Host "LAN IP 候補: $($ips -join ', ')"
 
 $env:CAROOT = Join-Path $root 'certs\caroot'

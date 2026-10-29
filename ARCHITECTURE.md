@@ -172,7 +172,7 @@ DETAIL_FIT = 2.2   フィット表示最大辺 (m)
 
 ## 5. HTTPS・証明書
 
-- `scripts/setup-cert.ps1` が `tools\mkcert.exe` で**ローカルCA＋LAN IP（192.168.100.25）SAN 証明書**を `certs/` に生成（gitignore）。Quest 側に mkcert ルートCA をインストールして警告を消している（初期設定済み・2026-10-24）。
+- `scripts/setup-cert.ps1` が `tools\mkcert.exe` で**ローカルCA＋LAN IP（192.168.100.25）SAN 証明書**を `certs/` に生成（gitignore）。Quest 3 実機では証明書の警告（「詳細情報」→「続行」）で開いている（2026-10 時点の運用。CA 信頼導入は任意・未検証の代替手段）。
 - 証明書はポート非依存 → `port` 変更で再生成不要。WebXR は secure context 必須のため HTTPS は必須インフラ。
 
 ## 6. アルバム意味論（album_mode）
