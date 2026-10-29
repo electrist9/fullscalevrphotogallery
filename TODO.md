@@ -1,15 +1,21 @@
 # TODO.md — 残作業・未決事項
 
-> 最終更新: 2026-10-29（main @ `c49cc2e`）。完了済み項目は PLAN.md §2 変更履歴と PROJECT_STATE.md §2 を参照（这里是「やっていないこと」だけ）。
+> 最終更新: 2026-10-29（main @ `bc4a071`）。完了済み項目は PLAN.md §2 変更履歴と PROJECT_STATE.md §2 を参照（这里是「やっていないこと」だけ）。
 
-## 1. M4「品質・配布」（未着手・次のマイルストーン）
+## 1. M4「品質・配布」（進行中・次のマイルストーン）
 
 PLAN.md §7 の M4 完了条件: **「初回セットアップ30分以内で動く」**。
+**配布方針（2026-10-29 ユーザー決定）**: セルフホスト配布（LAN限定・認証なしの stance 不変。インターネット公開は対象外）。チャネルは **GitHubリポジトリ＋zipパッケージ** の両方。ライセンス **MIT**。README **日本語のみ**。zipは**スリム**（ソース＋models/＋ビルド済み web/dist＋セットアップスクリプト。ユーザーは Python 3.12 を導入済みであることが前提）。
 
-- [ ] **README.md 作成**（新規ユーザー向けセットアップ手順）: mkcert CA の PC→Quest へのインストール手順、`certs/` 生成（`scripts/setup-cert.ps1`）、`config.json` の3キー（port/photos_root/album_mode）解説、非8443ポート時の Windows ファイアウォールルール（`netsh advfirewall firewall add rule ... localport=<ポート>`、管理者）、Quest URL の開き方、`start-server.ps1`/`build-web.ps1` の実行順。
+- [x] 公開前掃除（`Photos/_stress/` 削除・webxr-test 遺物削除・stale修正・テスト修正）→ `bc4a071` で完了。
+- [ ] **`scripts/setup.ps1` 実装**（初回セットアップ自動化）: Python 3.12 検出（無ければ案内）、`.venv` 作成、`pip install -r requirements.txt`、`setup-cert.ps1` 実行、`web/dist` が無ければ Node 自動DL→ビルド（zip配布ではビルド済み dist 同梱のため通常スキップ）。
+- [ ] **README.md 作成**（新規ユーザー向けセットアップ手順・日本語）: 前提（Windows PC／Quest 3／同一LAN／Python 3.12）、zip展開→`setup.ps1`→`start-server.ps1` の手順、mkcert ルートCA（`certs/caroot/rootCA.pem`）の **Quest 側への信頼登録手順**（実機で実際に通した手順を明記すること）、`config.json` の3キー（port/photos_root/album_mode）解説、非8443ポート時の Windows ファイアウォールルール（`netsh advfirewall firewall add rule name="FSVR Gallery <ポート>" dir=in action=allow protocol=TCP localport=<ポート>`、管理者）、Quest URL `https://<LAN-IP>:<ポート>/` の開き方、開発者向け（`build-web.ps1`・pytest）。
+- [ ] **LICENSE（MIT）作成**。
+- [ ] **`scripts/make-release.ps1` 実装**（スリムzip生成）: git追跡ファイル＋ビルド済み `web/dist` を含め、`Photos/` `data/` `certs/` `.venv/` `tools/node/` `node_modules/` `.pnpm-store/` `PortableGit/` `.tmp/` を除外。`fsvg-v<版>.zip` 出力。
 - [ ] セットアップ手順の実測（まっさらな環境で30分以内の確認）。
 - [ ] 受け入れ基準 §9-3 の正式検証: **キャリブレーション人物基準で原寸大の身長表示誤差 ±5%以内** を実機で確認（`scripts/make_fixture.py` 生成の既知IPDキャリブ写真を使用。`server/tests/test_scale.py` の PC 側誤差テストは合格済み、実機での体感/表示値確認が未記録）。
-- 備考: 性能予算（PLAN §7）のテクスチャ/LRU 対策は M3 で実装済み（LRU 48・ウィンドウ生成・1000枚実機OK）。差分インデックスも前倒し済み。M4 で残るのは主にドキュメントと正式検証。
+- [ ] GitHub リポジトリ作成・push・Release に zip 添付（GitHub アカウントはユーザー所有。push 認証手段をその時点で確認）。
+- 備考: 性能予算（PLAN §7）のテクスチャ/LRU 対策は M3 で実装済み（LRU 48・ウィンドウ生成・1000枚実機OK）。差分インデックスも前倒し済み。M4 で残るのは主にドキュメント・配布自動化と正式検証。
 
 ## 2. 未決事項（PLAN.md §10 で唯一未決 — ユーザーの決定待ち）
 
