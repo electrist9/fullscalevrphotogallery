@@ -12,7 +12,7 @@ CREATE TABLE IF NOT EXISTS photos (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   relpath TEXT UNIQUE NOT NULL,     -- photos_root からの相対パス（スラ区切り）。一意キー
   filename TEXT NOT NULL,           -- 表示用ファイル名（basename）
-  album TEXT NOT NULL DEFAULT '',   -- アルバム=photos_root 直下の相対フォルダパス。''=直下
+  album TEXT NOT NULL DEFAULT '',   -- アルバムキー（config.json の album_mode で導出。''=photos_root直下）
   path TEXT NOT NULL,
   width INTEGER NOT NULL,
   height INTEGER NOT NULL,

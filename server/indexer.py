@@ -21,7 +21,10 @@ import facedetect  # noqa: E402
 import scale  # noqa: E402
 
 # 写真データディレクトリは config.json の photos_root（既定 Photos/、相対はリポジトリ直下基準）
-PHOTO_DIR = config.load_config()["photos_root"]
+# アルバム定義は config.json の album_mode（1=全ディレクトリ/サブディレクトリ別アルバム、2=第一階層のみ）
+_CFG = config.load_config()
+PHOTO_DIR = _CFG["photos_root"]
+ALBUM_MODE = _CFG["album_mode"]
 THUMB_MAX = 256
 SUPPORTED = (".jpg", ".jpeg", ".png", ".webp", ".bmp")
 
@@ -81,7 +84,8 @@ def make_thumb(pil_image) -> bytes:
 
 
 def iter_photo_relpaths():
-    """Photos/ 以下を再帰走査。アルバム=サブフォルダ（Photos/ からの相対パス、スラ区切り）。
+    """photos_root 以下を再帰走査。アルバムは config.json の album_mode で決まる
+    （1=直属の親ディレクトリ、2=第一階層ディレクトリ。photos_root からの相対・スラ区切り）。
     隠しファイル/隠しフォルダと calibration* は除外。"""
     for dirpath, dirnames, filenames in os.walk(PHOTO_DIR):
         dirnames[:] = sorted(d for d in dirnames if not d.startswith("."))
@@ -140,7 +144,7 @@ def index_photo(con, rel):
     path = os.path.join(PHOTO_DIR, rel.replace("/", os.sep))
     st = os.stat(path)
     filename = rel.rsplit("/", 1)[-1]
-    album = rel.rsplit("/", 1)[0] if "/" in rel else ""
+    album = config.album_for_rel(rel, ALBUM_MODE)
     with PILImage.open(path) as im:
         W, H = im.size
         thumb_bytes = make_thumb(im)  # BLOB 保存（ファイルは作らない）
@@ -196,6 +200,11 @@ def reindex_all(force: bool = False):
             present.add(rel)
             path = os.path.join(PHOTO_DIR, rel.replace("/", os.sep))
             if not force and not _needs_reindex(con, path, rel):
+                # album_mode が変わっている行はアルバム列だけ更新（再検出はしない）
+                want = config.album_for_rel(rel, ALBUM_MODE)
+                cur = con.execute("SELECT album FROM photos WHERE relpath = ?", (rel,)).fetchone()
+                if cur and cur[0] != want:
+                    con.execute("UPDATE photos SET album = ? WHERE relpath = ?", (want, rel))
                 done += 1
                 with PROGRESS_LOCK:
                     PROGRESS["done"] = done

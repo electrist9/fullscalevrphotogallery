@@ -8,6 +8,18 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CONFIG_PATH = os.path.join(ROOT, "config.json")
 DEFAULT_PORT = 8443
 DEFAULT_PHOTOS_ROOT = "Photos"
+DEFAULT_ALBUM_MODE = 1  # 1=全ディレクトリ/サブディレクトリを別アルバム、2=第一階層ディレクトリのみアルバム
+
+
+def album_for_rel(rel: str, mode: int = DEFAULT_ALBUM_MODE) -> str:
+    """relpath（photos_root からの相対・スラ区切り）からアルバムキーを導出。
+    '' は photos_root 直下。mode=1: 直属の親ディレクトリパス（全階層が別アルバム）。
+    mode=2: 第一階層ディレクトリ（第二階層以下の写真もそのアルバムに含む）。"""
+    if "/" not in rel:
+        return ""
+    if mode == 2:
+        return rel.split("/", 1)[0]
+    return rel.rsplit("/", 1)[0]
 
 
 def load_config(path: str = CONFIG_PATH) -> dict:
@@ -15,6 +27,10 @@ def load_config(path: str = CONFIG_PATH) -> dict:
 
     photos_root: 写真データディレクトリ。相対パスはリポジトリ直下からの相対。
     絶対パスも可。ディレクトリが存在しない場合は警告して作成する（空ギャラリー）。
+
+    album_mode: アルバム定義。1=photos_root 配下の全ディレクトリ/サブディレクトリを
+    別アルバム（既定・従来動作）、2=第一階層ディレクトリのみアルバム（第二階層
+    以下の写真もそのアルバムに含む）。
     """
     cfg: dict = {}
     try:
@@ -47,4 +63,9 @@ def load_config(path: str = CONFIG_PATH) -> dict:
         except OSError as e:
             print(f"photos_root を作成できないため既定値 {DEFAULT_PHOTOS_ROOT!r} を使用: {e}")
             photos_root = os.path.join(ROOT, DEFAULT_PHOTOS_ROOT)
-    return {"port": port, "photos_root": photos_root}
+    album_mode = cfg.get("album_mode", DEFAULT_ALBUM_MODE)
+    # bool は int のサブクラスだがアルバムモードとして不正
+    if not isinstance(album_mode, int) or isinstance(album_mode, bool) or album_mode not in (1, 2):
+        print(f"config.json の album_mode が不正なため既定値 {DEFAULT_ALBUM_MODE} を使用: {album_mode!r}")
+        album_mode = DEFAULT_ALBUM_MODE
+    return {"port": port, "photos_root": photos_root, "album_mode": album_mode}
