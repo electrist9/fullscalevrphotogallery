@@ -108,7 +108,7 @@ def list_photos(album: str | None = None):
 
 @app.get("/api/albums")
 def list_albums():
-    """アルバム一覧（''=Photos/直下）。件数付き。"""
+    """アルバム一覧（''=photos_root直下）。件数付き。"""
     con = db.connect()
     try:
         return [

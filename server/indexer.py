@@ -1,4 +1,4 @@
-# Photos/ をスキャンし、サムネイル(BLOB) + 顔/虹彩 pupil_px + Pose足元 を DB にキャッシュ (M0)
+# photos_root（config.json で設定、既定 Photos/）をスキャンし、サムネイル(BLOB) + 顔/虹彩 pupil_px + Pose足元 を DB にキャッシュ (M0)
 # 2026-10-26: サムネイルは 1画像=1ファイル をやめ SQLite BLOB（thumbs表）へ。
 #             差分再スキャン（mtime/size 変更分のみ）と進捗状態（/api/index/progress 用）を追加。
 import importlib.util
@@ -15,11 +15,13 @@ if importlib.util.find_spec("PIL") is None:  # venv未導入時のみ .pylibs �
     sys.path.insert(0, os.path.join(ROOT, ".pylibs"))
 
 from PIL import Image as PILImage  # noqa: E402
+import config  # noqa: E402
 import db  # noqa: E402
 import facedetect  # noqa: E402
 import scale  # noqa: E402
 
-PHOTO_DIR = os.path.join(ROOT, "Photos")
+# 写真データディレクトリは config.json の photos_root（既定 Photos/、相対はリポジトリ直下基準）
+PHOTO_DIR = config.load_config()["photos_root"]
 THUMB_MAX = 256
 SUPPORTED = (".jpg", ".jpeg", ".png", ".webp", ".bmp")
 
