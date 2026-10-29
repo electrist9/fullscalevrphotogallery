@@ -1,4 +1,4 @@
-# サーバー起動: workspace内 .venv の python で HTTPS 起動
+﻿# サーバー起動: workspace内 .venv の python で HTTPS 起動
 # ポート・写真ディレクトリ（photos_root）・アルバム定義（album_mode）はリポジトリ直下の config.json（既定 8443 / Photos / 1）。編集後は再起動で反映。
 # 使い方: powershell -File scripts\start-server.ps1
 $ErrorActionPreference = 'Stop'
