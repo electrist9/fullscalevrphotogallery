@@ -43,7 +43,7 @@ PC の写真フォルダを、**Meta Quest 3 のブラウザ（HMD 単体・PC �
 ### GitHub から clone する場合
 
 ```powershell
-git clone https://github.com/<あなたのGitHubユーザー名>/fullscalevrphotogallery
+git clone https://github.com/electrist9/fullscalevrphotogallery
 cd fullscalevrphotogallery
 powershell -ExecutionPolicy Bypass -File scripts\setup.ps1
 ```
