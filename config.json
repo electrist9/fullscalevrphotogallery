@@ -1,4 +1,5 @@
 {
   "port": 8443,
-  "photos_root": "Photos"
+  "photos_root": "Photos",
+  "album_mode": 2
 }

@@ -106,3 +106,54 @@ def test_photos_root_invalid_falls_back():
             assert config.load_config(p)["photos_root"] == os.path.join(ROOT, "Photos")
         finally:
             os.remove(p)
+
+
+# ---- album_mode ----
+
+def test_real_config_file_has_album_mode():
+    # リポジトリ直下の config.json は album_mode を持つ（既定 1=従来動作）
+    assert config.load_config()["album_mode"] == config.DEFAULT_ALBUM_MODE
+
+
+def test_valid_album_mode():
+    for m in (1, 2):
+        p = _write(json.dumps({"album_mode": m}))
+        try:
+            assert config.load_config(p)["album_mode"] == m
+        finally:
+            os.remove(p)
+
+
+def test_album_mode_invalid_falls_back():
+    for bad in (0, 3, "1", True, None):
+        p = _write(json.dumps({"album_mode": bad}))
+        try:
+            assert config.load_config(p)["album_mode"] == config.DEFAULT_ALBUM_MODE
+        finally:
+            os.remove(p)
+
+
+def test_album_mode_missing_defaults():
+    p = _write(json.dumps({"port": 8443}))
+    try:
+        assert config.load_config(p)["album_mode"] == config.DEFAULT_ALBUM_MODE
+    finally:
+        os.remove(p)
+
+
+# ---- album_for_rel（アルバムキー導出） ----
+
+def test_album_for_rel_mode1():
+    f = config.album_for_rel
+    assert f("a.jpg", 1) == ""                # photos_root 直下
+    assert f("AlbumA/a.jpg", 1) == "AlbumA"   # 第一階層
+    assert f("a/b/c.jpg", 1) == "a/b"         # 第二階層以下の親ディレクトリがアルバム
+    assert f("a/b/c/d.jpg", 1) == "a/b/c"
+
+
+def test_album_for_rel_mode2():
+    f = config.album_for_rel
+    assert f("a.jpg", 2) == ""                # photos_root 直下は従来どおり ''
+    assert f("AlbumA/a.jpg", 2) == "AlbumA"
+    assert f("a/b/c.jpg", 2) == "a"           # 第二階層以下も第一階層のアルバムに含む
+    assert f("a/b/c/d.jpg", 2) == "a"
