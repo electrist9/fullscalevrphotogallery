@@ -22,4 +22,4 @@ $sans = @('localhost', '127.0.0.1', '::1') + $ips
 Write-Host ''
 Write-Host '生成物: certs\server.crt / certs\server.key'
 Write-Host 'ルートCA (Quest側に信頼させるファイル): certs\caroot\rootCA.pem'
-Write-Host 'サーバ起動: node scripts\webxr-test-server.mjs'
+Write-Host 'サーバ起動: powershell -File scripts\start-server.ps1'
