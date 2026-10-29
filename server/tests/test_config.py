@@ -66,3 +66,43 @@ def test_missing_file_falls_back():
     p = os.path.join(TMP, "nope.json")
     shutil.rmtree(TMP, ignore_errors=True)
     assert config.load_config(p)["port"] == config.DEFAULT_PORT
+
+
+# ---- photos_root ----
+
+def test_photos_root_default():
+    # 既定はリポジトリ直下の Photos/（実在するため作成副作用なし）
+    assert config.load_config()["photos_root"] == os.path.join(ROOT, "Photos")
+
+
+def test_photos_root_relative_resolved_to_root():
+    target = os.path.normpath(os.path.join(ROOT, ".tmp", "alt_rel_photos"))
+    shutil.rmtree(target, ignore_errors=True)
+    p = _write(json.dumps({"photos_root": ".tmp/alt_rel_photos"}))
+    try:
+        got = config.load_config(p)["photos_root"]
+        assert got == os.path.normpath(target)
+        assert os.path.isdir(got)  # 存在しないため自動作成された
+    finally:
+        os.remove(p)
+        shutil.rmtree(target, ignore_errors=True)
+
+
+def test_photos_root_absolute():
+    target = os.path.join(TMP, "abs_photos")
+    os.makedirs(target, exist_ok=True)
+    p = _write(json.dumps({"photos_root": target}))
+    try:
+        assert config.load_config(p)["photos_root"] == os.path.normpath(target)
+    finally:
+        os.remove(p)
+        shutil.rmtree(target, ignore_errors=True)
+
+
+def test_photos_root_invalid_falls_back():
+    for bad in (123, "", "   ", True):
+        p = _write(json.dumps({"photos_root": bad}))
+        try:
+            assert config.load_config(p)["photos_root"] == os.path.join(ROOT, "Photos")
+        finally:
+            os.remove(p)

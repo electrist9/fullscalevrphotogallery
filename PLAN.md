@@ -28,7 +28,7 @@ PCに保存した写真を、VR HMD（Meta Quest 3 / 3S）のWebブラウザか�
 | HMD | Meta Quest 3 / 3S（Questブラウザ = Chromium系、WebXR `immersive-vr` 対応） |
 | PC | Windows / macOS / Linux のいずれか（LAN上でHMDと同一ネットワーク） |
 | 顔検出・IPD計測 | **PCサーバ側で事前処理**（インデックス時にメタデータ化してキャッシュ） |
-| 写真の保存場所 | ワークスペース直下の `Photos/`（再帰的にスキャン、拡張子 jpg/png/webp/heic 等） |
+| 写真の保存場所 | ワークスペース直下の `Photos/`（再帰的にスキャン、拡張子 jpg/png/webp/heic 等）。**2026-10-29 より `config.json` の `photos_root` で可変**（相対はリポジトリ直下基準、絶対パスも可） |
 | セキュリティ | 基本はLAN内利用のみ。インターネット公開はスコープ外（将来拡張） |
 
 ### 重要な技術的制約: WebXRはHTTPS必須
@@ -51,7 +51,7 @@ Questブラウザでは `navigator.xr` が **セキュアコンテキスト（HT
 
 `server/` と `web/` を実装。PC側検証に加え、**Quest 3 実機で一覧表示とクリックによる画像表示を確認し、M0 完了**。
 
-- サーバ: `server/app.py`（FastAPI + Uvicorn、mkcert証明書で `https://0.0.0.0:8443`）。`server/db.py`（SQLite: `photos`/`faces`）、`server/facedetect.py`（MediaPipe虹彩→pupil_px、フル画像→上部クロップ→2x拡大の多段）、`server/indexer.py`（`Photos/` スキャン→WebPサムネイル256px→顔検出→DBキャッシュ、削除ファイルの整理）。
+- サーバ: `server/app.py`（FastAPI + Uvicorn、mkcert証明書で `https://0.0.0.0:8443`）。`server/db.py`（SQLite: `photos`/`faces`）、`server/facedetect.py`（MediaPipe虹彩→pupil_px、フル画像→上部クロップ→2x拡大の多段）、`server/indexer.py`（`photos_root`（config.json、既定 `Photos/`）スキャン→WebPサムネイル256px→顔検出→DBキャッシュ、削除ファイルの整理）。
 - API: `GET /api/health` / `GET /api/photos`（一覧＋顔の `pupil_px`・`method`・bbox）/ `GET /api/photos/{id}` / `POST /api/reindex`。静的: `/photos`（元画像）、`/thumbs`（WebP、`image/webp`で配信）、`/`（`web/dist`）。
 - フロント（`web/`、Vite+TS+Three.js）: サムネイルグリッド→クリックで Three.js フラットビューア。平面サイズは `mm_per_px = IPD / pupil_px`（§4.2）で原寸換算。IPDはデフォルト63mm＋ヘッダ入力＋localStorage永続化。顔なし写真は高さ1.0m固定にフォールバック。`pnpm run build` → `web/dist`。
 - PC側検証（Node TLSクライアント）: `/api/health`・`/api/photos`（6枚、pupil_px一致）・`/`・`/assets/*.js`・`/thumbs/*.webp`（image/webp）・`/photos/*.jpg` すべて HTTP 200。LAN IP `192.168.100.25` 経由でも 200、証明書SANに当該IPを含む（有効期限 2029-01-24）。
@@ -202,6 +202,7 @@ DOMギャラリーに「VRで開く」ボタンを追加し、`immersive-vr` セ
   - **Quest 3 実機確認（2026-10-29、OK）**: ①報告の3枚（testalbum/ComfyUI_00083_ / testalbum16/Qwen_image_2.1_00069 / testalbum4/ComfyUI_00034_）で青い四角が消えた ②余白≥2cmの全身写真で折り曲げ・折り目シームが従来どおり ③半身・フィット表示が従来どおり — 3項目すべて想定通り。
 - **サーバーポートの可変化和設定ファイル config.json（2026-10-29 要望・Quest 3 実機確認済み・ブランチ `feature/server-port-config`）**: 固定だったサーバーポート（8443/tcp）を、リポジトリ直下の **`config.json`**（`{"port": 8443}`。コミット済み・シークレット無し）で変更可能にした。**GUIは作らない — テキストエディタで書き換えてサーバー再起動で反映**（要望どおりの運用）。**実装**: ①`server/config.py` 新設（`load_config()`。ファイル無し→無警告で既定8443 / JSON不正・portが整数(1〜65535)以外・bool・文字列→警告を出して既定8443へフォールバック）。②`server/app.py` の `main()` が config からポートを読み uvicorn に渡す。起動時表示URLも実ポート連動。③`web/vite.config.ts` の dev プロキシも同じ config.json を読む（本番ビルド・Webクライアントは相対パスのためポート非依存、変更なし）。④`scripts/start-server.ps1` はコメントのみ更新。**証明書はポートを含まない（mkcert SANはIP/localhostのみ）ため再生成不要**。QuestブラウザのURLは `https://192.168.100.25:<新ポート>/` になる。**ファイアウォール注意**: 8443以外のポートに変更する場合は管理者権限で `netsh advfirewall firewall add rule name="FSVR Gallery <ポート>" dir=in action=allow protocol=TCP localport=<ポート>` で新ポートの受信許可が必要（既存許可ルールは8443用）。**検証（PC、2026-10-29）**: `server/tests/test_config.py` 6件追加＋既存 `test_scale.py` 5件、計11件 pytest パス。config.json を 8543 に変更してサーバー起動 → `Uvicorn running on https://0.0.0.0:8543` を確認、`GET /api/albums` が HTTPS 200（証明書読み込み挙動不変）。vite build 成功（src 変更なし、バンドル `index-Bb-JhJM3.js` 不変）。
   - **Quest 3 実機確認（2026-10-29、OK）**: ①config.json の port を変更してサーバー再起動 → Quest 3ブラウザで `https://192.168.100.25:<新ポート>/` を開くとギャラリー・アルバム・詳細表示が正常 ②既定の8443でも従来どおり動作 — 2項目すべて想定通り。
+- **写真データディレクトリ（photos_root）の可変化（2026-10-29 要望・PC検証済み・Quest 3 実機確認待ち・ブランチ `feature/photos-root-config`）**: 固定だった写真データディレクトリ（リポジトリ直下 `Photos/`）を **`config.json` の `photos_root`** キーで変更可能にした（ポートと同じ運用 — GUIなし、テキストエディタで編集してサーバー再起動で反映）。**実装**: ①`server/config.py` の `load_config()` を拡張し photos_root を解決（既定 `"Photos"`。**相対パスはリポジトリ直下からの相対、絶対パスも可**。文字列以外・空・空白のみなら警告して既定へフォールバック。**指定ディレクトリが存在しない場合は警告して自動作成**＝空ギャラリーで起動。`/photos` マウントの StaticFiles が存在しないディレクトリだと起動時にクラッシュするため。作成不可なら警告して既定値へフォールバック）。②`server/indexer.py` の `PHOTO_DIR = config.load_config()["photos_root"]`（走査・サムネイル・顔検出すべて自動追従。`app.py` の `/photos` 静的マウントは `indexer.PHOTO_DIR` 参照のため変更不要）。③`config.json` に `"photos_root": "Photos"` を追記。④`db.py` / `app.py` / `start-server.ps1` の Photos/ 表記コメントを photos_root に更新。**注意**: relpath は photos_root からの相対なので、photos_root を変えると差分再スキャンで旧ディレクトリの行が削除され、新ディレクトリを再インデックス（顔検出が一度フル実行される。1000枚で約35秒）。**検証（PC、2026-10-29）**: `test_config.py` に photos_root テスト4件追加（既定値 / 相対→ROOT解決＋自動作成 / 絶対パス / 不正値フォールバック）、計15件 pytest パス。既定 config でサーバー起動 → `indexer.PHOTO_DIR = <repo>/Photos`、`GET /api/albums` HTTPS 200、`/photos/face_lena.jpg` 静的配信 200 を確認。Webクライアントは相対URLのため web 再ビルド不要。
 
 ---
 
@@ -323,7 +324,7 @@ plane_h_m = img_h_px * mm_per_px / 1000  … ③ 同・高さ
 ```
 fullscalevrphotogallery/
 ├─ PLAN.md
-├─ Photos/              # 写真フォルダ（スキャン対象・gitignore）
+├─ Photos/              # 写真フォルダ（スキャン対象・gitignore。config.json の photos_root で変更可）
 │  └─ calibration_*.png # 検証用キャリブ画像（scripts/make_fixture.py で生成）
 ├─ certs/               # mkcert生成物（gitignore）
 ├─ tools/               # mkcert.exe
@@ -397,7 +398,7 @@ fullscalevrphotogallery/
 ## 10. 未決事項（次のレビューで決める）
 
 - ~~`ipd_real` のデフォルト63mmで確定するか~~ → **決定(2026-10-24): デフォルト63mm + 設定画面で上書き**。
-- ~~写真フォルダ~~ → **決定(2026-10-24: ワークスペース直下の `Photos/`**。検証用キャリブ画像は `scripts/make_fixture.py` で生成済み）。
+- ~~写真フォルダ~~ → **決定(2026-10-24: ワークスペース直下の `Photos/`**。検証用キャリブ画像は `scripts/make_fixture.py` で生成済み。2026-10-29 に `config.json` の `photos_root` で変更可能化）。
 - ~~HEIC（iPhone写真）のサーバ側デコードを採用するか（pillow-heif）~~ → **決定(2026-10-28: 対応不要)**。当アプリでの HEIC 利用頻度が極めて低い。調査結果: Quest Browser（Chromium ベース）は HEIF/HEIC を非サポート（caniuse 2026-03 時点で Chrome 全バージョン未対応、Safari のみ対応）のため、対応するなら pillow-heif でサムネイル＋詳細表示用フルサイズの両方をサーバー側変換する必要があった（現状 `indexer.py` の `SUPPORTED` に `.heic` は含まれず、HEIC ファイルは単にスキャン対象外＝無視される動作。このまま据え置き）。
 - ギャラリーの空間デザイン: 白いギャラリー部屋 vs 無限グリッド。
 - ~~認証（PIN等）をLAN利用でも付けるか~~ → **決定(2026-10-28: 不要)**。個人利用（自宅LAN内でのみ使用）を前提とするため認証は設けない。現状どおり HTTPS（mkcert LAN証明書・WebXR要件）のみで、アクセス制限なし。

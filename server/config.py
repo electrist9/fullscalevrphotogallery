@@ -7,10 +7,15 @@ import os
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CONFIG_PATH = os.path.join(ROOT, "config.json")
 DEFAULT_PORT = 8443
+DEFAULT_PHOTOS_ROOT = "Photos"
 
 
 def load_config(path: str = CONFIG_PATH) -> dict:
-    """config.json を読んで設定辞書を返す。不正値は既定値にフォールバック。"""
+    """config.json を読んで設定辞書を返す。不正値は既定値にフォールバック。
+
+    photos_root: 写真データディレクトリ。相対パスはリポジトリ直下からの相対。
+    絶対パスも可。ディレクトリが存在しない場合は警告して作成する（空ギャラリー）。
+    """
     cfg: dict = {}
     try:
         with open(path, encoding="utf-8") as f:
@@ -18,14 +23,28 @@ def load_config(path: str = CONFIG_PATH) -> dict:
         if isinstance(loaded, dict):
             cfg = loaded
         else:
-            print(f"config.json がオブジェクトではないため既定ポート {DEFAULT_PORT} を使用")
+            print(f"config.json がオブジェクトではないため既定値を使用（port {DEFAULT_PORT} / photos_root {DEFAULT_PHOTOS_ROOT}）")
     except FileNotFoundError:
         pass  # 設定ファイルが無いのはエラーではない（既定値で作動）
     except (json.JSONDecodeError, OSError) as e:
-        print(f"config.json が読み込めないため既定ポート {DEFAULT_PORT} を使用: {e}")
+        print(f"config.json が読み込めないため既定値を使用（port {DEFAULT_PORT}）: {e}")
     port = cfg.get("port", DEFAULT_PORT)
     # bool は int のサブクラスだがポートとして不正。文字列も拒否。
     if not isinstance(port, int) or isinstance(port, bool) or not (1 <= port <= 65535):
         print(f"config.json の port が不正なため既定ポート {DEFAULT_PORT} を使用: {port!r}")
         port = DEFAULT_PORT
-    return {"port": port}
+    photos_root = cfg.get("photos_root", DEFAULT_PHOTOS_ROOT)
+    if not isinstance(photos_root, str) or not photos_root.strip():
+        print(f"config.json の photos_root が不正なため既定値 {DEFAULT_PHOTOS_ROOT!r} を使用: {photos_root!r}")
+        photos_root = DEFAULT_PHOTOS_ROOT
+    if not os.path.isabs(photos_root):
+        photos_root = os.path.join(ROOT, photos_root)
+    photos_root = os.path.normpath(photos_root)
+    if not os.path.isdir(photos_root):
+        print(f"photos_root が存在しないため作成します: {photos_root}")
+        try:
+            os.makedirs(photos_root)
+        except OSError as e:
+            print(f"photos_root を作成できないため既定値 {DEFAULT_PHOTOS_ROOT!r} を使用: {e}")
+            photos_root = os.path.join(ROOT, DEFAULT_PHOTOS_ROOT)
+    return {"port": port, "photos_root": photos_root}
