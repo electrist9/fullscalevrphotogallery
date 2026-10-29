@@ -68,14 +68,12 @@ interface Detail {
   root: THREE.Group; // 配置（プレイヤー正面、y=0床基準）
   photoGroup: THREE.Group; // 実寸ジオメトリの平面（開いた時点でフィット or 原寸大に固定）
   photoMesh: THREE.Mesh;
-  guide: THREE.Mesh; // 床接地ガイド（原寸大時のみ表示）
-  guideMat: THREE.MeshBasicMaterial;
   label: THREE.Mesh;
   photo: Photo;
   wM: number;
   hM: number;
   lifeSize: boolean; // 原寸大可能か
-  feetOnFloor: boolean; // 原寸大で画像内の足元(sole_y)が床接地（接地ガイドを出すか）
+  feetOnFloor: boolean; // 原寸大で画像内の足元(sole_y)が床接地（sole固定・必要なら床折り曲げ）
   distM: number; // 開いたときに適用された表示距離 (m)。情報ラベル表示用
 }
 
@@ -507,7 +505,7 @@ export async function startXRGallery(photos: Photo[], initialAlbum: string | nul
     const vSole = sc.soleYpx != null ? 1 - sc.soleYpx / photo.height : 0;
     const mainHM = useFold ? hM - stripBelowM : hM; // 主プレインの高さ（sole_y→画像上端）
 
-    const root = new THREE.Group(); // y=0（床基準）。photoGroup/label/guide を相対配置
+    const root = new THREE.Group(); // y=0（床基準）。photoGroup/label を相対配置
     const photoGroup = new THREE.Group();
     photoGroup.position.y = startLife ? lifeY : EYE_Y;
     photoGroup.position.z = startZ;
@@ -549,21 +547,12 @@ export async function startXRGallery(photos: Photo[], initialAlbum: string | nul
       floorStrip.position.set(0, 0.002, startZ + stripBelowM / 2); // 床より2mm上（Zファイティング回避）。+y端（折り目）は z=startZ の y≈0 で主プレイン下端（y=0）と接する
     }
 
-    // 床接地ガイド: 平面下端から手前へ伸びる帯（原寸大時のみ opacity でフェード）
-    const guideMat = new THREE.MeshBasicMaterial({
-      color: 0x2f6feb,
-      transparent: true,
-      opacity: 0,
-      depthWrite: false,
-    });
-    const guide = new THREE.Mesh(new THREE.PlaneGeometry(Math.max(wM, 0.4), 0.34), guideMat);
-    guide.rotation.x = -Math.PI / 2;
-    guide.position.set(0, 0.006, startZ + 0.18);
-    guideMat.opacity = startLife ? 0.55 : 0;
-    guide.visible = startLife && feetOnFloor && !useFold; // 余白ストリップを平置きする場合はガイド不要（折り目が見える）
+    // 2026-10-29 実機指摘: 床接地ガイド（青帯）が折り曲げ面の前に青い四角として見え、
+    // 余白<2cmで折り曲げないケースでも同様に不要な帯として見えた。接地は折り目（余白≥2cm）
+    // または写真下端そのもの（余白<2cm）で視認できるためガイド帯を廃止した。
 
     const d: Detail = {
-      root, photoGroup, photoMesh, guide, guideMat,
+      root, photoGroup, photoMesh,
       label: new THREE.Mesh(),
       photo, wM, hM,
       lifeSize: sc.lifeSize, feetOnFloor,
@@ -580,7 +569,6 @@ export async function startXRGallery(photos: Photo[], initialAlbum: string | nul
     d.label.visible = labelVisible; // デフォルト非表示（詳細画像上のトリガーでトグル、状態はセッション中維持）
 
     root.add(photoGroup);
-    root.add(guide);
     if (floorStrip) root.add(floorStrip);
     root.add(d.label);
 
