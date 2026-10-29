@@ -170,12 +170,15 @@ if os.path.isdir(WEB_DIST):
 
 def main():
     import uvicorn
+    import config
     if not (os.path.isfile(CRT) and os.path.isfile(KEY)):
         print("証明書がありません。scripts\\setup-cert.ps1 を実行してください。")
         sys.exit(1)
-    print("FullScaleVR M0: https://192.168.100.25:8443  (Quest 3 Browser で開く)")
+    port = config.load_config()["port"]
+    print(f"FullScaleVR M0: https://192.168.100.25:{port}  (Quest 3 Browser で開く)")
+    print(f"ポートは config.json の port で変更できます（編集後はサーバー再起動）")
     uvicorn.run(
-        app, host="0.0.0.0", port=8443,
+        app, host="0.0.0.0", port=port,
         ssl_certfile=CRT, ssl_keyfile=KEY,
     )
 
