@@ -22,8 +22,8 @@ PC の写真フォルダを、**Meta Quest 3 のブラウザ（HMD 単体・PC �
 
 ## 2. セットアップ（zip 版）
 
-1. リリース zip（`fsvg-vX.Y.Z.zip`）を好きなフォルダに展開します（例: `C:\fsvg`）。
-2. PowerShell でそのフォルダを開き、セットアップを 1 回だけ実行します:
+1. リリース zip（`fsvg-vX.Y.Z.zip`）を好きな場所に展開します（例: `C:\` に展開すると `C:\fsvg-vX.Y.Z` フォルダができます）。
+2. PowerShell で展開後の `fsvg-vX.Y.Z` フォルダを開き、セットアップを 1 回だけ実行します:
 
    ```powershell
    powershell -ExecutionPolicy Bypass -File scripts\setup.ps1

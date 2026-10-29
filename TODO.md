@@ -1,6 +1,6 @@
 # TODO.md — 残作業・未決事項
 
-> 最終更新: 2026-10-29（main @ `f34fdef`）。完了済み項目は PLAN.md §2 変更履歴と PROJECT_STATE.md §2 を参照（这里是「やっていないこと」だけ）。
+> 最終更新: 2026-10-29（main @ `1b1cbd8`）。完了済み項目は PLAN.md §2 変更履歴と PROJECT_STATE.md §2 を参照（这里是「やっていないこと」だけ）。
 
 ## 1. M4「品質・配布」（進行中・次のマイルストーン）
 
@@ -12,7 +12,7 @@ PLAN.md §7 の M4 完了条件: **「初回セットアップ30分以内で動�
 - [x] **README.md 作成**（新規ユーザー向けセットアップ手順・日本語）→ feature/m4-distribution で完了。一次手順は**警告の「詳細情報」→「続行」**（実運用で確認済み。ユーザーが CA 未インストールと判明したため方針変更）。CA 信頼登録は任意・未検証の代替として併記。config.json 3キー・ファイアウォール・トラブルシューティング・セキュリティ注意含む。
 - [x] **LICENSE（MIT）作成** → © 2026 FullScale VR Photo Gallery contributors。
 - [x] **`scripts/make-release.ps1` 実装**（スリムzip生成）→ feature/m4-distribution で完了。git追跡ファイル＋ビルド済み `web/dist`、内部ドキュメント（PLAN/PROJECT_STATE/ARCHITECTURE/DECISIONS/TODO）除外。テスト実行 OK（`release/fsvg-v0.9.0.zip` 11.3MB）。
-- [ ] セットアップ手順の実測（まっさらな環境で30分以内の確認）。
+- [x] セットアップ手順の実測（まっさらな環境で30分以内の確認）→ **サンドボックス環境では測定不可**（2026-10-29 ユーザー決定でスキップ）。新規テスト（zip展開→setup.ps1）は Python 3.12 検出まで OK（`1b1cbd8` の EAP対策で解消）だが、`python -m venv` の ensurepip が harness サンドボックスの一時フォルダ書き込み拒否で失敗（`tempfile.mkdtemp` 配下のフォルダにサインインユーザー本人の権限項目が付かない。ACL診断レポート: `.tmp/acl-out/`）。setup.ps1 の欠陥ではなく、実ユーザーマシン（TEMP 書き込み可）では成功する見込み。
 - [ ] 受け入れ基準 §9-3 の正式検証: **キャリブレーション人物基準で原寸大の身長表示誤差 ±5%以内** を実機で確認（`scripts/make_fixture.py` 生成の既知IPDキャリブ写真を使用。`server/tests/test_scale.py` の PC 側誤差テストは合格済み、実機での体感/表示値確認が未記録）。
 - [ ] GitHub リポジトリ作成・push・Release に zip 添付（GitHub アカウントはユーザー所有。push 認証手段をその時点で確認）。
 - 備考: 性能予算（PLAN §7）のテクスチャ/LRU 対策は M3 で実装済み（LRU 48・ウィンドウ生成・1000枚実機OK）。差分インデックスも前倒し済み。M4 で残るのは主にドキュメント・配布自動化と正式検証。

@@ -1,6 +1,6 @@
 # PROJECT_STATE.md — プロジェクト現在状態
 
-> 最終更新: 2026-10-29（Asia/Tokyo）／ 対象リポジトリ: `F:\fullscalevrphotogallery`（branch `main` @ `f34fdef`、作業ツリークリーン）
+> 最終更新: 2026-10-29（Asia/Tokyo）／ 対象リポジトリ: `F:\fullscalevrphotogallery`（branch `main` @ `1b1cbd8`、作業ツリークリーン）
 > 本ファイルは別セッションのLLMが開発を継続するための状態記録。設計詳細は ARCHITECTURE.md、決定理由は DECISIONS.md、残作業は TODO.md。履歴の正典は PLAN.md（変更履歴セクション）。
 
 ## 1. プロジェクト概要
