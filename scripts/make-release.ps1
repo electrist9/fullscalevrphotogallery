@@ -18,7 +18,7 @@ if (-not (Test-Path $distIndex)) {
     exit 1
 }
 
-$stage = Join-Path $root ".tmp\release\pkg-$Version"
+$stage = Join-Path $root ".tmp\release\fsvg-$Version"
 $outDir = Join-Path $root 'release'
 $zipPath = Join-Path $outDir "fsvg-$Version.zip"
 if (Test-Path $stage) { Remove-Item $stage -Recurse -Force }
@@ -48,7 +48,25 @@ foreach ($f in $fileList) {
 Copy-Item (Join-Path $root 'web\dist') (Join-Path $stage 'web\dist') -Recurse
 $distCount = (Get-ChildItem (Join-Path $stage 'web\dist') -Recurse -File).Count
 
-Compress-Archive -Path (Join-Path $stage '*') -DestinationPath $zipPath -CompressionLevel Optimal
+# .NET ZipArchive で手動圧縮。Compress-Archive / CreateFromDirectory（.NET Framework 4.x）は
+# エントリ区切りが '\' になるため、zip 仕様に従い '/' 区切り・トップレベルフォルダ fsvg-v<版>/ で作成する。
+Add-Type -AssemblyName System.IO.Compression
+Add-Type -AssemblyName System.IO.Compression.FileSystem
+$fs = [System.IO.File]::Open($zipPath, [System.IO.FileMode]::Create)
+$zip = New-Object System.IO.Compression.ZipArchive($fs, [System.IO.Compression.ZipArchiveMode]::Create)
+try {
+    $stageParent = Split-Path -Parent $stage
+    foreach ($file in (Get-ChildItem $stage -Recurse -File)) {
+        $rel = $file.FullName.Substring($stageParent.Length + 1).Replace('\', '/')
+        $entry = $zip.CreateEntry($rel, [System.IO.Compression.CompressionLevel]::Optimal)
+        $srcStream = $file.OpenRead()
+        $entryStream = $entry.Open()
+        $srcStream.CopyTo($entryStream)
+        $entryStream.Dispose(); $srcStream.Dispose()
+    }
+} finally {
+    $zip.Dispose(); $fs.Dispose()
+}
 
 $sizeMB = [math]::Round((Get-Item $zipPath).Length / 1MB, 1)
 Write-Host ''

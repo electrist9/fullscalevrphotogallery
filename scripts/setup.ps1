@@ -16,20 +16,29 @@ Write-Host ''
 
 # ---- 1. Python 3.12 を探す ----
 function Find-Python312 {
-    # py ランチャー（Windows 標準インストーラーが入れる）を優先
-    if (Get-Command py.exe -ErrorAction SilentlyContinue) {
-        $v = & py -3.12 -V 2>$null
-        if ($LASTEXITCODE -eq 0 -and "$v" -match 'Python 3\.12') {
-            return @{ Cmd = 'py'; Args = @('-3.12') }
+    # PowerShell 5.1 では $ErrorActionPreference='Stop' の下、ネイティブコマンドの
+    # stderr 出力が例外になる（py ランチャーが 3.12 未登録時に stderr へエラーを出す）。
+    # 探索中だけ Continue に下げる。
+    $prevEAP = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    try {
+        # py ランチャー（Windows 標準インストーラーが入れる）を優先
+        if (Get-Command py.exe -ErrorAction SilentlyContinue) {
+            $v = & py -3.12 -V 2>$null
+            if ($LASTEXITCODE -eq 0 -and "$v" -match 'Python 3\.12') {
+                return @{ Cmd = 'py'; Args = @('-3.12') }
+            }
         }
-    }
-    if (Get-Command python.exe -ErrorAction SilentlyContinue) {
-        $v = & python -V 2>$null
-        if ("$v" -match 'Python 3\.12') {
-            return @{ Cmd = 'python'; Args = @() }
+        if (Get-Command python.exe -ErrorAction SilentlyContinue) {
+            $v = & python -V 2>$null
+            if ("$v" -match 'Python 3\.12') {
+                return @{ Cmd = 'python'; Args = @() }
+            }
         }
+        return $null
+    } finally {
+        $ErrorActionPreference = $prevEAP
     }
-    return $null
 }
 
 $pyExe = Join-Path $root '.venv\Scripts\python.exe'
