@@ -111,8 +111,12 @@ def test_photos_root_invalid_falls_back():
 # ---- album_mode ----
 
 def test_real_config_file_has_album_mode():
-    # リポジトリ直下の config.json は album_mode を持つ（既定 1=従来動作）
-    assert config.load_config()["album_mode"] == config.DEFAULT_ALBUM_MODE
+    # リポジトリ直下の config.json は album_mode を持つ。運用値は 1/2 のいずれかでよく
+    # （既定 1 と限らない: 実機検証中の運用値が 2 でもよい）、フォールバックせずそのまま読めることを検証する。
+    with open(config.CONFIG_PATH, encoding="utf-8") as f:
+        raw = json.load(f)
+    assert raw.get("album_mode") in (1, 2)
+    assert config.load_config()["album_mode"] == raw["album_mode"]
 
 
 def test_valid_album_mode():

@@ -102,7 +102,7 @@
 - 理由: WinPS 5.1 の `Invoke-WebRequest -SkipCertificateCheck` 非対応、`curl.exe -k` は schannel で SEC_E_NO_CREDENTIALS。確立パターン: `ssl._create_unverified_context()` + `urllib.request.urlopen("https://127.0.0.1:<port>/...")`（例 `.tmp/photos_root_check.py`）。
 
 ### E4. 負荷テストは生成写真1000枚（`tools/_make_stress_photos.py` → `Photos/_stress/`）
-- 理由: 1000枚規模の性能・スクロール快適性を実機で検証するため（2026-10-26〜28、合格）。**現在も Photos/_stress に1000枚残存中**（整理は TODO 参照）。
+- 理由: 1000枚規模の性能・スクロール快適性を実機で検証するため（2026-10-26〜28、合格）。**検証完了のため Photos/_stress は 2026-10-29 に削除済み**（生成スクリプト `tools/_make_stress_photos.py` は再実行可能として保持）。
 
 ### E5. 検証用キャリブレーション画像は `scripts/make_fixture.py` で生成（`calibration*` はインデックス除外）
 - 理由: 既知IPDの合成写真で pupil_px 誤差・スケールを回帰テスト可能に。indexer は `calibration*` を明示除外しているので Photos/ 直下に置いてもギャラリーに混ざらない。

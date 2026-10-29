@@ -43,9 +43,8 @@ fullscalevrphotogallery/
 ├─ models/                  # face_landmarker.task / pose_landmarker_full.task（オフライン同梱）
 ├─ server/                  # Python サーバー（下記 §3）
 ├─ web/                     # Vite+TS クライアント（下記 §4）
-├─ scripts/                 # start-server.ps1 / build-web.ps1 / setup-cert.ps1 / facecheck.py / make_fixture.py / webxr-test-server.mjs
+├─ scripts/                 # start-server.ps1 / build-web.ps1 / setup.ps1 / setup-cert.ps1 / facecheck.py / make_fixture.py
 ├─ tools/                   # mkcert.exe / _make_stress_photos.py（1000枚生成）/ _stress_index_run.py / _check_*.py
-├─ webxr-test/              # 事前検証ページ（2026-10-24 合格済み・遺物）
 ├─ .venv/                   # Python 環境（gitignore）
 ├─ tools/node/ + .pnpm-store/  # Node/pnpm 同梱（gitignore、workspace自己完結）
 └─ PortableGit/             # git 同梱（gitignore。git は & PortableGit\bin\git.exe で呼ぶ）

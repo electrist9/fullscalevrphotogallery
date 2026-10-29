@@ -31,12 +31,10 @@ PLAN.md §7 の M4 完了条件: **「初回セットアップ30分以内で動�
 
 ## 5. 掃除・.housekeeping（動作影響なし、見つけたときに）
 
-- [ ] **`Photos/_stress/` の1000枚（生成テスト写真）の扱いをユーザーと決める**: 削除するならフォルダ削除→サーバー再起動（差分スキャンで自動削除、CASCADE）。現在 DB 1061枚のうち1000枚を占めており、アルバム一覧・「すべて」件数に載り続けている。
-- [ ] `webxr-test/` と `scripts/webxr-test-server.mjs` は事前検証（2026-10-24 合格済み）の遺物。削除または README への「歴史的検証物」明記。
-- [ ] `.tmp/port_probe.py` は stale（ポート8543固定・旧検証）。削除可（`.tmp/` の他スクリプト `album_mode_check.py` / `photos_root_check.py` / `static_probe.py` は再実行可能な検証スクリプトとして保持価値あり）。
 - [ ] `.gitignore` の `Photos/` は photos_root をリポジトリ外へ移した場合に効かない。photos_root がリポジトリ内の別名ディレクトリのときは gitignore 追加が必要（運用で吸収可）。
 - [ ] FastAPI `on_event` 非推奨警告（benign）: 将来の FastAPI 更新で消える可能性あり。そのときは `lifespan` へ移行。
-- [ ] 本4ファイル（PROJECT_STATE/ARCHITECTURE/DECISIONS/TODO）は 2026-10-29 作成時点では**未コミット**。内容が実態と一致することを確認して main にコミットし、以後は機能マージ時に PLAN.md と一緒に更新する。
+
+（2026-10-29 公開前掃除で完了済み: `Photos/_stress/` 1000枚削除＋DB除去／`webxr-test/`・`scripts/webxr-test-server.mjs` git削除／`.tmp/port_probe.py` 削除／状態記録4ファイルは main にコミット済み `ba2546b`）
 
 ## 6. 明示的に「やらない」と決まっていること（再検討しない）
 

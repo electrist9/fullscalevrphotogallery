@@ -47,9 +47,9 @@ PC上の写真フォルダを、Quest 3 の WebXRブラウザ（HMD単体・PC�
 
 ## 4. 現在のデータ状態（`data/app.db`、gitignore）
 
-- 写真 **1061枚** インデックス済み（うち `Photos/_stress/` が **1000枚** の負荷テスト生成写真、`tools/_make_stress_photos.py` で生成されたもの。実写は約61枚: 直下6、AlbumA/B/C、testalbum系、日本語名フォルダ、`いい`/`💛かかかか❤` 等のテストフォルダ）。
-- faces 87件。サムネイルは DB BLOB（WebP 256px q82）＋ `data/thumbs/` ファイルの二重持ち（BLOBが配信主、ファイルは移行済み残存）。
-- album_mode=2 適用後のアルバム列（`''` 6, `AlbumA` 2, `AlbumB` 2, `AlbumC` 25, `_stress` 1000, testalbum系 各1〜3, 日本語名 各1）。
+- 写真 **61枚** インデックス済み（2026-10-29 の公開前掃除で `Photos/_stress/` の負荷テスト生成写真1000枚を削除、差分再インデックスで DB からも除去済み。生成スクリプト `tools/_make_stress_photos.py` は保持・再実行可）。内訳: 直下6、AlbumA/B/C（2/2/25）、testalbum系17アルバム（各1〜3）、tetalbum10 1、日本語名・絵文字名フォルダ各1（計7）。
+- faces 62件。サムネイルは DB BLOB（WebP 256px q82・合計0.5MB）。
+- album_mode=2 適用後のアルバム列（`''` 6, `AlbumA` 2, `AlbumB` 2, `AlbumC` 25, testalbum系 各1〜3, tetalbum10 1, 日本語名等 各1）。
 
 ## 5. 実行方法
 
@@ -93,7 +93,7 @@ Quest 3 での確認手順（確立済みワークフロー）: PCでサーバ�
 - mediapipe の stderr ノイズ（`WARNING: Logging before InitGoogle()`、XNNPACK、NORM_RECT 等）は benign。FastAPI `on_event is deprecated` 警告も benign。
 - HTTPS APIプローブは PowerShell/curl ではなく Python で: `ssl._create_unverified_context()` + `urllib.request.urlopen("https://127.0.0.1:<port>/...")`（例 `.tmp/photos_root_check.py`）。
 - サンドボックス（workspace-write）: 書き込みはリポジトリ直下のみ。pytest の `tmp_path` は PermissionError になるため **`ROOT/.tmp/` に uuid 名ファイル＋後片付け**が確立パターン。`vite build` は esbuild の named pipe で EPERM になることがあり、その場合のみ one-shot の権限エスカレーションで実行。
-- `.tmp/` は検証用スクラッチ（gitignore）。`album_mode_check.py` / `photos_root_check.py` / `static_probe.py` は再実行可能な検証スクリプトとして残存（`port_probe.py` は stale・8543固定なので使わない）。
+- `.tmp/` は検証用スクラッチ（gitignore）。`album_mode_check.py` / `photos_root_check.py` / `static_probe.py` は再実行可能な検証スクリプトとして残存（stale な `port_probe.py` は 2026-10-29 削除済み）。
 
 ## 8. 主要ファイル早見
 
@@ -115,4 +115,3 @@ Quest 3 での確認手順（確立済みワークフロー）: PCでサーバ�
 | `models/*.task` | MediaPipe モデル（face_landmarker / pose_landmarker_full、オフライン同梱） |
 | `scripts/` | start-server / build-web / setup-cert / facecheck / make_fixture |
 | `tools/` | mkcert.exe、ストレス写真生成・検証スクリプト |
-| `webxr-test/` | 事前検証ページ（2026-10-24 合格済み・歴史的遺物） |
