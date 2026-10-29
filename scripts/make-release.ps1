@@ -32,10 +32,12 @@ if ($LASTEXITCODE -ne 0) { Write-Error 'git ls-files に失敗しました'; exi
 
 # 内部開発ドキュメントはエンドユーザー向け zip から除外（GitHub リポジトリには残る）
 $excludeDocs = @('PLAN.md', 'PROJECT_STATE.md', 'ARCHITECTURE.md', 'DECISIONS.md', 'TODO.md')
+# 開発者向けスクリプト（GitHub 公開用）もエンドユーザー zip からは除外
+$excludeDev = @('scripts/publish-github.ps1')
 
 $copied = 0
 foreach ($f in $fileList) {
-    if ($excludeDocs -contains $f) { continue }
+    if ($excludeDocs -contains $f -or $excludeDev -contains $f) { continue }
     $src = Join-Path $root $f
     if (-not (Test-Path $src)) { continue }  # 消された追跡ファイル（未コミット削除）はスキップ
     $dst = Join-Path $stage $f
