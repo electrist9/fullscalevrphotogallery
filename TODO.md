@@ -1,6 +1,6 @@
 # TODO.md — 残作業・未決事項
 
-> 最終更新: 2026-10-30（オフライン配布形式完了・`feature/offline-dist`）。完了済み項目は PLAN.md §2 変更履歴と PROJECT_STATE.md §2 を参照（这里是「やっていないこと」だけ）。
+> 最終更新: 2026-10-30（**M4 完了・GitHub 公開済み**・`main`）。完了済み項目は PLAN.md §2 変更履歴と PROJECT_STATE.md §2 を参照（这里是「やっていないこと」だけ）。
 
 ## 1. M4「品質・配布」（進行中・次のマイルストーン）
 
@@ -18,7 +18,7 @@ PLAN.md §7 の M4 完了条件: **「初回セットアップ30分以内で動�
   - `Photos/calib/2.png`: 実測 158cm → 表示 1.58m（pupil_px 210.8・server height_mm 1583.5）誤差 **0.00%**
   - `Photos/calib/3.png`: 実測 164cm → 表示 1.65m（pupil_px 222.5・server height_mm 1652.7）誤差 **+0.61%**
 - [x] **オフライン配布形式（2026-10-30 ユーザー要望）**: zip 展開→`fsvg.exe` ダブルクリックだけで起動（Python 不要・オフライン可）→ `feature/offline-dist` で完了。`build-runtime.ps1`（tools\pyruntime 406MB・import検証OK）／`launcher.cs`+`build-launcher.ps1`（csc.exe→fsvg.exe）／`run.ps1`（runtime\python.exe 解決・初回証明書自動生成・Quest URL表示・`-Check`）／`make-release.ps1` 改修（runtime・fsvg.exe・mkcert.exe 同梱）／`setup.ps1`・`start-server.ps1`・README 更新。**zip 160.4MB**（従来 11.3MB。GitHub Release 上限 2GB 内）。
-- [ ] GitHub リポジトリ作成・push・Release に zip 添付（**ユーザーが手動実施（2026-10-30 決定）**。手順済み: `git remote add origin https://github.com/electrist9/fullscalevrphotogallery.git` → `git push -u origin main` → Release `v0.9.0` に `release\fsvg-v0.9.0.zip`（160.4MB）添付）。
+- [x] GitHub リポジトリ作成・push・Release に zip 添付（**2026-10-30 ユーザーが手動実施完了**: `https://github.com/electrist9/fullscalevrphotogallery` に main（`1cd8519`）push ＋ Release `v0.9.0` に `release\fsvg-v0.9.0.zip`（160.4MB・オフライン配布形式）添付済み。`scripts/publish-github.ps1` は未使用でリポジトリに残置）。
 - 備考: 性能予算（PLAN §7）のテクスチャ/LRU 対策は M3 で実装済み（LRU 48・ウィンドウ生成・1000枚実機OK）。差分インデックスも前倒し済み。M4 で残るのは主にドキュメント・配布自動化と正式検証。
 
 ## 2. 未決事項（PLAN.md §10 で唯一未決 — ユーザーの決定待ち）
