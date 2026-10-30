@@ -111,7 +111,7 @@ Quest 3 での確認手順（確立済みワークフロー）: PCでサーバ�
 | `server/scale.py` | 原寸大スケール計算（mm/px・身長） |
 | `server/tests/` | pytest 22件（test_config 17 / test_scale 5） |
 | `web/src/theme.ts` | テーマパレット定義（`Palette` 30スロット・`buildPalette` で base/accent 2色から導出＋`overrides`） |
-| `themes/*.json` | サーバーテーマ（1ファイル=1テーマ。`list_themes()` がリクエスト毎に読む。追加のみで反映・再起動不要） |
+| `themes/*.json` | サーバーテーマ（1ファイル=1テーマ。`list_themes()` がリクエスト毎に読む。追加のみで反映・再起動不要）。作者向け解説は `themes/README.md` |
 | `THEME_DESIGN.md` | テーマ機能の設計（導出ルール・検算） |
 | `web/src/xrGallery.ts` | VRギャラリー本体（約1100行、最重要ファイル） |
 | `web/src/main.ts` / `gallery.ts` | 2Dページ |
