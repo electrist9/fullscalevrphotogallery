@@ -1000,22 +1000,56 @@ function raycastPanel(
 }
 
 function buildRoom(scene: THREE.Scene): void {
+  // 空間デザイン 2026-10-30: シーンフォグ＋床径向グラデ＋壁垂直グラデ（無限グリッド感の解消）
+  const BG = 0x0b0d10;
+  scene.fog = new THREE.FogExp2(BG, 0.15);
+
+  // 床: 径向グラデーション（中心=明るい → 外周=背景色）で「無限」感を解消
+  const floorCanvas = document.createElement("canvas");
+  floorCanvas.width = 512;
+  floorCanvas.height = 512;
+  const fctx = floorCanvas.getContext("2d")!;
+  const fgrad = fctx.createRadialGradient(256, 256, 0, 256, 256, 256);
+  fgrad.addColorStop(0, "#4a5568");
+  fgrad.addColorStop(0.35, "#2a3040");
+  fgrad.addColorStop(0.7, "#141820");
+  fgrad.addColorStop(1, "#0b0d10");
+  fctx.fillStyle = fgrad;
+  fctx.fillRect(0, 0, 512, 512);
+  const floorTex = new THREE.CanvasTexture(floorCanvas);
+  floorTex.colorSpace = THREE.SRGBColorSpace;
+
   const floor = new THREE.Mesh(
     new THREE.CircleGeometry(R + 3.5, 48),
-    new THREE.MeshBasicMaterial({ color: 0x14161a }),
+    new THREE.MeshBasicMaterial({ map: floorTex }),
   );
   floor.rotation.x = -Math.PI / 2;
   scene.add(floor);
 
-  const grid = new THREE.GridHelper((R + 3.5) * 2, 28, 0x2c3038, 0x1d2025);
+  // グリッド: 残すがフォグで距離減衰。線色を明るくして近距離での参照点として機能させる
+  const grid = new THREE.GridHelper((R + 3.5) * 2, 28, 0x6a7585, 0x4a5568);
   // 2026-10-28 実機指摘: 床折り曲げストリップ（y=0.002）と同一高さでZ-fightingし、
   // グリッド線が写真ストリップの上に見えた。グリッドを1mm下げてストリップを確実に上に（深度精度はµm規模で1mm差は十分）
   grid.position.y = 0.001;
   scene.add(grid);
 
+  // 壁: 垂直グラデーション（下部=明るい → 上部=背景色）で空間の輪郭を自然に示す
+  const wallCanvas = document.createElement("canvas");
+  wallCanvas.width = 4;
+  wallCanvas.height = 256;
+  const wctx = wallCanvas.getContext("2d")!;
+  const wgrad = wctx.createLinearGradient(0, 0, 0, 256);
+  wgrad.addColorStop(0, "#0b0d10");   // 上部（天井側）→ 背景色に溶ける
+  wgrad.addColorStop(0.5, "#1e2530");
+  wgrad.addColorStop(1, "#3a4555");   // 下部（床側）→ 壁色（明確に明るい）
+  wctx.fillStyle = wgrad;
+  wctx.fillRect(0, 0, 4, 256);
+  const wallTex = new THREE.CanvasTexture(wallCanvas);
+  wallTex.colorSpace = THREE.SRGBColorSpace;
+
   const wall = new THREE.Mesh(
     new THREE.CylinderGeometry(R + 3.5, R + 3.5, 4, 48, 1, true),
-    new THREE.MeshBasicMaterial({ color: 0x171a20, side: THREE.BackSide }),
+    new THREE.MeshBasicMaterial({ map: wallTex, side: THREE.BackSide }),
   );
   wall.position.y = 2;
   scene.add(wall);
