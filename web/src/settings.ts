@@ -73,3 +73,16 @@ export function getDistFitM(): number {
 export function setDistFitM(m: number): void {
   localStorage.setItem(DIST_FIT_KEY, String(m));
 }
+
+// テーマ名 (localStorage には名前だけ保存。THEME_DESIGN.md §7)。既定 "plain"。
+// 実体（base/accent）はサーバ配信 or 内蔵 plain。名前で解決し、無ければ plain にフォールバック。
+const THEME_KEY = "fsvg.theme";
+export const THEME_DEFAULT = "plain";
+
+export function getThemeName(): string {
+  return localStorage.getItem(THEME_KEY) || THEME_DEFAULT;
+}
+
+export function setThemeName(name: string): void {
+  localStorage.setItem(THEME_KEY, name);
+}
