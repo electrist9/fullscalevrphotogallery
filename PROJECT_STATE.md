@@ -82,7 +82,7 @@ Quest 3 での確認手順（確立済みワークフロー）: PCでサーバ�
 5. `git checkout main && git merge --no-ff feature/<name>` → ブランチ削除。
 6. **git は必ず `& PortableGit\bin\git.exe`**（git が PATH に無い。PortableGit はリポジトリ直下に同梱）。
 
-- サーバーのみ変更で Web クライアント不変なら **web 再ビルド不要**（クライアントは相対URL）。Web 変更時は `build-web.ps1` 後に dist バンドル名（現在 `index-Bb-JhJM3.js`、497.25 kB / gzip 129.97 kB）を PLAN.md に記録する慣習。
+- サーバーのみ変更で Web クライアント不変なら **web 再ビルド不要**（クライアントは相対URL）。Web 変更時は `build-web.ps1` 後に dist バンドル名（現在 `index-DT2L8EYd.js`、500.15 kB / gzip 131.00 kB）を PLAN.md に記録する慣習。
 - 設定系の新項目は port / photos_root / album_mode と同じパターンで: `config.json` キー追加 → `server/config.py` の `load_config()` で tolerant 解析（日本語警告＋既定フォールバック）→ 使用側参照 → `test_config.py` にテスト追加 → `start-server.ps1` コメント更新。
 
 ## 7. 環境・サンドボックス上の注意（Windows / DSH環境）
