@@ -1,6 +1,6 @@
 # PROJECT_STATE.md — プロジェクト現在状態
 
-> 最終更新: 2026-10-30（Asia/Tokyo）／ 対象リポジトリ: `F:\fullscalevrphotogallery`（branch `main` @ `1cd8519`、**M4 完了・GitHub 公開済み**）
+> 最終更新: 2026-10-30（Asia/Tokyo）／ 対象リポジトリ: `F:\fullscalevrphotogallery`（branch `main` @ `1cd8519`、**M4 完了・GitHub 公開済み・M5-1疑似ステレオ設計確定（PLAN §11）**）
 > 本ファイルは別セッションのLLMが開発を継続するための状態記録。設計詳細は ARCHITECTURE.md、決定理由は DECISIONS.md、残作業は TODO.md。履歴の正典は PLAN.md（変更履歴セクション）。
 
 ## 1. プロジェクト概要
@@ -14,7 +14,7 @@ PC上の写真フォルダを、Quest 3 の WebXRブラウザ（HMD単体・PC�
 
 ## 2. 現在の到達点（すべて Quest 3 実機確認済み）
 
-マイルストーン（PLAN.md §7）: **M0・M1・M2・M3・M4 完了（2026-10-30）**。M4（品質・配布）の内容: 公開前掃除、配布物一式（`scripts/setup.ps1`／README.md（日本語）／LICENSE（MIT）／`scripts/make-release.ps1`）、**§9-3 実機 ±5% 検証 PASS（2026-10-30、3/3・最大誤差 +1.24%、`Photos/calib/1〜3.png`）**、**オフライン配布形式（2026-10-30、feature/offline-dist）**: zip に Python ランタイム（`runtime\`、tools\pyruntime 406MB）と `fsvg.exe`（csc.exe ビルドのランチャー）と mkcert.exe を同梱し、「展開して fsvg.exe をダブルクリックだけ・オフライン完結」に変更（zip 160.4MB。詳細は PLAN.md 変更履歴）、**GitHub 公開（2026-10-30・ユーザー手動実施）**: `https://github.com/electrist9/fullscalevrphotogallery` に main push ＋ Release `v0.9.0` に zip 添付済み（`scripts/publish-github.ps1` は未使用でリポジトリに残置）。30分実測はサンドボックス権限問題でスキップ記録（TODO.md §1）。**M5（拡張）は任意・未着手**。
+マイルストーン（PLAN.md §7）: **M0・M1・M2・M3・M4 完了（2026-10-30）**。M4（品質・配布）の内容: 公開前掃除、配布物一式（`scripts/setup.ps1`／README.md（日本語）／LICENSE（MIT）／`scripts/make-release.ps1`）、**§9-3 実機 ±5% 検証 PASS（2026-10-30、3/3・最大誤差 +1.24%、`Photos/calib/1〜3.png`）**、**オフライン配布形式（2026-10-30、feature/offline-dist）**: zip に Python ランタイム（`runtime\`、tools\pyruntime 406MB）と `fsvg.exe`（csc.exe ビルドのランチャー）と mkcert.exe を同梱し、「展開して fsvg.exe をダブルクリックだけ・オフライン完結」に変更（zip 160.4MB。詳細は PLAN.md 変更履歴）、**GitHub 公開（2026-10-30・ユーザー手動実施）**: `https://github.com/electrist9/fullscalevrphotogallery` に main push ＋ Release `v0.9.0` に zip 添付済み（`scripts/publish-github.ps1` は未使用でリポジトリに残置）。30分実測はサンドボックス権限問題でスキップ記録（TODO.md §1）。**M5-1（疑似ステレオ表示）設計確定（2026-10-30・PLAN.md §11）、実装未着手**。M5-2以降（実ステレオペア・お気に入り）は未設計。EXIF深度補正・動画は対象外（2026-10-30決定）。
 
 実機確認済みの機能（詳細履歴は PLAN.md §2 変更履歴、各項目に「Quest 3 実機確認（日付、OK）」サブ項目あり）:
 

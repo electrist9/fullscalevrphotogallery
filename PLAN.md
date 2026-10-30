@@ -214,6 +214,7 @@ DOMギャラリーに「VRで開く」ボタンを追加し、`immersive-vr` セ
 - **GitHub 公開完了・M4 完了（2026-10-30・ユーザーが手動実施）**: `git remote add origin https://github.com/electrist9/fullscalevrphotogallery.git` → `git push -u origin main`（main @ `1cd8519`。リモート追跡 refs で同期確認済み）→ **Release `v0.9.0` に `release\fsvg-v0.9.0.zip`（160.4MB・オフライン配布形式）添付済み**。`scripts/publish-github.ps1` は未使用（リポジトリに残置）。M4 の全項目完了（30分実測のみユーザー決定でスキップ記録・TODO.md §1）。次は M5（拡張・任意）のみ。
 - **設定パネルの2画面化＋一覧行の文字消失不具合修正（2026-10-30 要望・xrGallery.ts/settings.ts のみ）**: ①**2画面化（案A）**: 1枚に6項目×3行で文字過多だった設定パネルを「一覧画面（Canvas 1024×640、6行＝アイコン+ラベル+現在値、行を選ぶと個別編集画面へ）」＋「個別編集画面（Canvas 1024×512、現在値 110px 大表示＋範囲バー＋±小/±大＋初期化/実測＋戻る）」に分離。行/ボタンの当たり面は 3D mesh（`userData.action`=`open_<key>`/`back`/`<key>_minusL|minusS|plusS|plusL|reset`/`eye_measure`）。`applySettingsAction` は Canvas 再描画のみで画面切替（mesh 再構築は openSettings 再呼び出し）。②**不具合修正（実機指摘「視線を向けた行の文字が消える」）**: 原因は行の背景帯を 3D mesh（opacity 0.5）で本文Canvasの手前 z=+3mm に置いていたため、帯が文字を覆って暗くし、ホバーで青に変わると行が現れたり消えたりして見えていた。**修正**: 背景帯を Canvas 側（drawSettingsBody、テキスト描画前）へ移動し、3D側は当たり面（透明 face）のみ。render ループでホバー行の action 変化を検知して `hoverKey` 更新→変化フレームのみ Canvas 再描画。`SettingsButton.frameMat` は任意化（一覧行は undefined、編集画面の±ボタンは 3D 枠ホバー維持）。**検証**: tsc 通過・vite build 成功（バンドル `index-D2BAgPxZ.js` 500.04 kB / gzip 130.96 kB）。**注意**: 実機は 8443 の dist 配信のため、修正反映には再ビルド＋Questブラウザのページ再読み込みが必要（初回修正時は dist が古く「変わっていない」と報告された）。**実機確認済み（2026-10-30）**: 2画面化は「文字量が適切になり大変わかりやすい」とユーザー承認。
 - **設定パネル一覧行の透け不具合修正（2026-10-30 実機指摘「向けた行が消える・パネルが透けて向こうが見える」・xrGallery.ts のみ）**: 原因は透明 mesh の深度書き込み。一覧行の当たり面（透明 face, z=+5mm）が `depthWrite` 既定 true で本文（Canvas 本文 plane, z=0）より手前の深度を書き、本文の深度テストがその行領域で落ちて本文自体が描画されなくなり、写真が透けて見えていた（視線=レールが当たった行だけ消える症状と一致）。**修正**: ①当たり面を `depthWrite:false`＋`renderOrder:2` に変更（raycast は material 設定に依存しないため当たり判定は不変）。②パネル内レイヤーを renderOrder で固定（本文=1、ボタン枠/面=2、ボタンラベル=3）し、three.js r169 の透明ソート（groupOrder→renderOrder→material.id→視差z）に依存しない確定順に。③`makeLabel` のラベル material を `depthWrite:false` に（全ラベル共通で深度を書かない扱いに変更）。**検証**: tsc 通過・vite build 成功（バンドル `index-DT2L8EYd.js` 500.15 kB / gzip 131.00 kB）。Questブラウザのページ再読み込みで反映（サーバー再起動不要）。**実機確認済み（2026-10-30）**: 行の消失・透けなし、青ハイライト表示、各項目の変更とも正常動作。
+- **M5-1 疑似ステレオ表示 設計確定（2026-10-30・ドキュメントのみ・コード変更なし・実機ゲート対象外）**: 次期機能として「深度情報のない写真から深度情報を推定して疑似立体化する」ステレオ表示の設計を PLAN.md §11 に確定。**決定事項**: ①深度推定モデル = **Depth Anything V2 Small**（ONNX・onnxruntime CPU推定・~0.5–1s/枚・モデルファイル ~100MB）。②生成タイミング = **遅延生成**（初回VR詳細表示時に `POST /api/photos/{pid}/stereo-generate` でトリガー、mono表示継続中にバックグラウンド生成、ready 検出でテクスチャ切替）。③DIBR方式 = **水平シフト＋後方ワープ＋線形補間穴埋め**（仮想カメラ間隔=実IPD、顔平面で視差0に正規化）。④VR表示 = **SBS画像＋ShaderMaterial パーイサンプリング**（`onBeforeRender` で eye index 検出、左半分/右半分を各目に）。⑤原寸大統合 = 顔検出の IPD/身長はそのまま流用、DIBR視差をIPD基準で正規化。⑥DB = `photos.stereo_status`（NULL/pending/ready/failed）＋`stereo_ver`。⑦SBS画像は `data/stereo/{photo_id}.webp` ファイル保存。⑧新規依存 = `onnxruntime`（requirements.txt）、`models/depth_anything_v2_small.onnx`。実装は別セッション（M5-1a〜e サブマイル、TODO.md §4）。
 
 ---
 
@@ -299,7 +300,7 @@ plane_h_m = img_h_px * mm_per_px / 1000  … ③ 同・高さ
 ### 4.3 既知の限界（計画書として正直に書く）
 
 - ①は**被写体の深度平面**でのスケール。カメラ画角・距離による遠近で、体や背景は原寸からずれる（顔は正確）。
-- 撮影時の焦点距離がEXIFから取れる場合、深度勾配の補正を将来拡張とる（M5+）。
+- 撮影時の焦点距離がEXIFから取れる場合、深度勾配の補正が理論上可能だが、当アプリの写真ではEXIFがほとんど付いていないため対象外（2026-10-30決定）。
 - メガネ・コンタクト・瞳の閉じ目は虹彩検出の精度を下げる → 信頼度で吸収。
 
 ### 4.4 検証方法
@@ -371,7 +372,7 @@ fullscalevrphotogallery/
 | **M2 原寸大（本命）** | 虹彩パイプライン、mm/px算出、原寸大モード、クランプ/フォールバック | キャリブ写真で誤差<5%、体感テスト合格 | +2週 — **完了（Quest 3 実機確認済み 2026-10-25）** |
 | **M3 UX・快適性** | アルバム、設定パネル、インデックス進捗UI（テレポート/ビネットは実装しない決定 2026-10-26） | 1000枚規模で快適に操作 | +1〜2週 — **完了（Quest 3 実機確認済み 2026-10-26）**（UI改良分・アルバム整理・詳細表示のモード固定化／トリガー=戻る／グリップ廃止・身長=頭頂→足元／足先=床接地・情報パネル デフォルト非表示＋Xボタン トグル・足元余白の床面折り曲げ表示（手前側へ延ばす配置）・半身の目の高さ 既定1.45m（2026-10-26 パネルで変更に）・XR設定パネル（写真推定IPD／半身の目の高さ）・1000枚規模性能（サムネイルBLOB化・差分再インデックス・進捗UI・XRグリッドページング→2026-10-28に1段連続スクロールへ置換・アルバムサムネイルチップ行（2026-10-28、ギャラリー上の旧2段目・連続スクロールUI）まで完了・実機確認済み） |
 | **M4 品質・配布** | 性能（テクスチャ予算）、README/セットアップ手順（差分インデックスはM3で前倒し実装済み） | 初回セットアップ30分以内で動く | +1週 |
-| M5 拡張（任意） | EXIF焦点距離による深度補正、ステレオ写真、動画、お気に入り | — | — |
+| M5 拡張（任意） | 疑似ステレオ写真（M5-1 設計確定 §11）、実ステレオペア、お気に入り | — | — |
 
 ### 性能予算（Questブラウザはメモリ上限が厳しい）
 
@@ -388,7 +389,7 @@ fullscalevrphotogallery/
 | WebXRがHTTPSでしか動かない | 開発が詰まる | M0でmkcert/adb reverseを先に確定 |
 | Questブラウザのメモリ制限 | クラッシュ | テクスチャ解像度上限・段階的ロード・LRU |
 | 虹彩検出失敗（メガネ・横顔） | 原寸大が壊れる | 信頼度スコア、 anthropometric 推定、手動IPD入力 |
-| 遠近歪みで「原寸」が顔以外ずれる | 体感の違和感 | 顔基準である旨をUI表示、M5でEXIF補正 |
+| 遠近歪みで「原寸」が顔以外ずれる | 体感の違和感 | 顔基準である旨をUI表示（EXIF補正は対象外・2026-10-30決定） |
 | 大量写真でインデックスが重い | 待ち時間 | 差分インデックス、SSE進捗、並列ワーカー |
 | LAN外アクセス要求 | セキュリティ | スコープ外。必要時はTailscale等+認証を別計画 |
 
@@ -409,5 +410,189 @@ fullscalevrphotogallery/
 - ~~`ipd_real` のデフォルト63mmで確定するか~~ → **決定(2026-10-24): デフォルト63mm + 設定画面で上書き**。
 - ~~写真フォルダ~~ → **決定(2026-10-24: ワークスペース直下の `Photos/`**。検証用キャリブ画像は `scripts/make_fixture.py` で生成済み。2026-10-29 に `config.json` の `photos_root` で変更可能化）。
 - ~~HEIC（iPhone写真）のサーバ側デコードを採用するか（pillow-heif）~~ → **決定(2026-10-28: 対応不要)**。当アプリでの HEIC 利用頻度が極めて低い。調査結果: Quest Browser（Chromium ベース）は HEIF/HEIC を非サポート（caniuse 2026-03 時点で Chrome 全バージョン未対応、Safari のみ対応）のため、対応するなら pillow-heif でサムネイル＋詳細表示用フルサイズの両方をサーバー側変換する必要があった（現状 `indexer.py` の `SUPPORTED` に `.heic` は含まれず、HEIC ファイルは単にスキャン対象外＝無視される動作。このまま据え置き）。
-- ギャラリーの空間デザイン: 白いギャラリー部屋 vs 無限グリッド。
+- ギャラリーの空間デザイン: 白いギャラリー部屋 vs 無限グリッド → **別ブランチで実装中（2026-10-30）**。
 - ~~認証（PIN等）をLAN利用でも付けるか~~ → **決定(2026-10-28: 不要)**。個人利用（自宅LAN内でのみ使用）を前提とするため認証は設けない。現状どおり HTTPS（mkcert LAN証明書・WebXR要件）のみで、アクセス制限なし。
+
+---
+
+## 11. M5-1 疑似ステレオ表示（設計確定 2026-10-30）
+
+### 11.1 概要
+
+深度情報のない2D写真から単眼深度推定で深度マップを生成し、DIBR（Depth-Image-Based Rendering）で右目視点を合成して疑似ステレオ化する。VR内で左右目に別画像を描画し、原寸大スケーリングを維持したまま立体感を実現する。
+
+**決定事項（2026-10-30）**:
+- 深度推定モデル: **Depth Anything V2 Small**（ONNX・CPU推定）
+- 生成タイミング: **遅延生成（初回VR詳細表示時にトリガー）**
+- 原寸大: **ステレオでも維持**（仮想カメラ間隔＝実IPDで整合）
+- 表示方式: **パーイ・テクスチャ**（SBS画像をShaderMaterialでeyeごとにサンプリング）
+
+### 11.2 サーバー側パイプライン
+
+```
+元画像 (photo)
+  ├─ 深度推定: Depth Anything V2 Small ONNX → 相対深度マップ (H×W, float)
+  ├─ 深度正規化: 顔領域の深度をアンカーに視差量をIPD基準でスケーリング
+  ├─ DIBR合成: 水平シフト（disparity = IPD_px × (1 - depth_norm)）で右目視点を生成
+  │   └─ 穴埋め: 後方ワープ + 線形補間（簡易。occlusion穴は隣接ピクセルで埋める）
+  └─ SBS画像保存: 左=元画像, 右=合成 → data/stereo/{photo_id}.webp
+```
+
+#### 深度推定モデル
+
+| 項目 | 値 |
+|---|---|
+| モデル | Depth Anything V2 Small |
+| フォーマット | ONNX（opset 17） |
+| 入力 | 518×518 RGB（リサイズ＋正規化） |
+| 出力 | 相対深度マップ（大きいほど近い） |
+| 推定時間 | CPU ~0.5–1s / 枚（onnxruntime） |
+| モデルファイル | `models/depth_anything_v2_small.onnx`（~100MB） |
+| 依存 | `onnxruntime`（requirements.txt追加） |
+
+#### DIBR（疑似ステレオ合成）
+
+- **仮想カメラ間隔**: 実IPD（既定63mm）。原寸大の顔平面で視差が実IPDと一致するよう正規化。
+- **視差計算**: `shift_px(x,y) = ipd_px × (1 - depth_norm(x,y))`。顔平面で shift=0、手前で正（右にずれる）、奥で負（左にずれる）。
+  - `ipd_px` = 顔検出の `pupil_px`（虹彩間距離px）。顔なし写真は画像幅の5%を仮定。
+  - `depth_norm` = 深度マップを顔領域中央値で正規化（0=顔平面, >1=奥, <1=手前）。
+- **ワープ方式**: 後方ワープ（right eye → left eye 座標変換）＋双線形補間。occlusion穴は近傍補完。
+- **品質**: 段差アーティファクト（レイヤードルック）は許容。写真ギャラリー用途では自然な立体感が得られる見込み。
+
+#### 遅延生成のフロー
+
+```
+[クライアント] VR詳細表示時に photo.stereo_status を確認
+  → NULL（未生成）の場合: POST /api/photos/{pid}/stereo-generate を送信
+  → mono表示を継続（現状動作のまま）
+
+[サーバー] stereo-generate エンドポイント
+  → DB stereo_status = 'pending' に更新
+  → バックグラウンドスレッドで depth + DIBR 実行
+  → 完了時: stereo_status = 'ready', data/stereo/{pid}.webp 保存
+  → 失敗時: stereo_status = 'failed'
+
+[クライアント] 生成完了ポーリング（GET /api/photos/{pid} の stereo_status）
+  → 'ready' 検出時: SBSテクスチャをロードし ShaderMaterial に切替
+```
+
+### 11.3 DB スキーマ変更
+
+```sql
+-- photos テーブルに追加（_migrate で ALTER TABLE）
+ALTER TABLE photos ADD COLUMN stereo_status TEXT;  -- NULL=未生成 | 'pending' | 'ready' | 'failed'
+ALTER TABLE photos ADD COLUMN stereo_ver INTEGER;  -- 生成戦略バージョン（detect_ver と同様の再生成制御）
+```
+
+- `stereo_ver`: 深度モデルやDIBRパラメータ変更時にバージョンを上げ、差分再生成をトリガー。
+- SBS画像はファイル保存（`data/stereo/{photo_id}.webp`）。BLOBにしない（フル解像度×2で大きい）。
+
+### 11.4 API エンドポイント
+
+| メソッド | パス | 説明 |
+|---|---|---|
+| POST | `/api/photos/{pid}/stereo-generate` | ステレオ生成を非同期トリガー。`{started: bool}` 返却 |
+| GET | `/api/stereo/{pid}` | SBS画像配信（ready時のみ200、それ以外404）。Cache-Control付与 |
+| GET | `/api/photos/{pid}` | 既存。`stereo_status` フィールド追加 |
+
+### 11.5 クライアント（WebXR）実装
+
+#### パーイ・テクスチャ描画
+
+```typescript
+// ShaderMaterial for stereo SBS
+const stereoMaterial = new THREE.ShaderMaterial({
+  uniforms: {
+    u_sbsTex: { value: sbsTexture },  // SBS画像（左半分=左目, 右半分=右目）
+    u_eye: { value: 0 },              // 0=left, 1=right（onBeforeRenderで設定）
+  },
+  vertexShader: `...`,
+  fragmentShader: `
+    uniform sampler2D u_sbsTex;
+    uniform int u_eye;
+    varying vec2 vUv;
+    void main() {
+      float x = (u_eye == 0) ? vUv.x * 0.5 : 0.5 + vUv.x * 0.5;
+      gl_FragColor = texture2D(u_sbsTex, vec2(x, vUv.y));
+    }
+  `,
+});
+
+// onBeforeRender で eye index を検出
+material.onBeforeRender = (renderer, scene, camera) => {
+  const xrCam = renderer.xr.getCamera();
+  if (xrCam && xrCam.cameras.length >= 2) {
+    material.uniforms.u_eye.value = (camera === xrCam.cameras[0]) ? 0 : 1;
+  }
+};
+```
+
+#### 表示切替ロジック（xrGallery.ts 詳細表示）
+
+- `photo.stereo_status === 'ready'` → SBSテクスチャロード → ShaderMaterial でステレオ表示
+- `photo.stereo_status === NULL` → 現状の mono 表示（MeshBasicMaterial）＋ `POST stereo-generate` 送信
+- `photo.stereo_status === 'pending'` → mono 表示継続、ポーリングで ready 検出時に切替
+- `photo.stereo_status === 'failed'` → mono 表示（再試行なし）
+
+#### 床折り曲げストリップとの統合
+
+- 折り曲げストリップ（floorStrip）も同じ SBS テクスチャ＋ShaderMaterial を使用
+- UV の x 範囲のみ eye で切り替え、y 範囲は既存の折り曲げ UV と同じ
+
+### 11.6 原寸大との統合
+
+- 顔検出は元画像（左目）で動作済み → IPD・身長・mm/px はそのまま流用
+- DIBR の仮想カメラ間隔 = 実IPD → 顔平面の視差が実IPDと一致
+- 深度マップは相対値 → 顔領域中央値をアンカーに正規化 → 顔平面の視差=0、前後が比例
+- 結果: 顔は原寸大で、前後の物体も概ね比例した奥行きで立体表示
+
+### 11.7 性能予算
+
+| 項目 | 予算 |
+|---|---|
+| 深度推定（CPU） | ~1s / 枚（518px入力） |
+| DIBR合成（NumPy） | ~0.1s / 枚 |
+| SBS画像サイズ | 元画像解像度×2（WebP q80）。例: 4000×3000 → 8000×3000 WebP ~2MB |
+| クライアントテクスチャ | 長辺2048px上限（既存ルール適用。SBSなら幅4096×高さ2048） |
+| 同時ステレオテクスチャ | 詳細1枚のみ（LRUキャッシュ対象に含める） |
+
+### 11.8 新規ファイル・変更ファイル
+
+| パス | 種別 | 役割 |
+|---|---|---|
+| `server/stereo.py` | 新規 | 深度推定＋DIBRパイプライン（`generate_stereo(photo_id)`） |
+| `models/depth_anything_v2_small.onnx` | 新規 | Depth Anything V2 Small ONNX（~100MB） |
+| `data/stereo/` | 新規（gitignore） | 生成済みSBS画像 |
+| `server/db.py` | 変更 | `stereo_status` / `stereo_ver` 列追加（_migrate） |
+| `server/app.py` | 変更 | `POST /api/photos/{pid}/stereo-generate`、`GET /api/stereo/{pid}` |
+| `server/indexer.py` | 変更 | 差分再インデックス時に stereo_ver 不一致を検出（再生成は遅延） |
+| `web/src/xrGallery.ts` | 変更 | ステレオ表示ロジック（ShaderMaterial、生成トリガー、ポーリング） |
+| `requirements.txt` | 変更 | `onnxruntime` 追加 |
+| `scripts/download-model.ps1` | 新規 | Depth Anything V2 Small ONNX のダウンロードスクリプト |
+
+### 11.9 実装マイルストーン（M5-1 内部）
+
+| サブマイル | 内容 | 完了条件 |
+|---|---|---|
+| M5-1a 深度推定PoC | ONNXモデル統合、深度マップ生成確認 | PCで深度マップが自然に見える |
+| M5-1b DIBR合成 | 水平シフト＋穴埋め、SBS画像生成 | PCでSBS画像が立体に見える（赤青メガネ or SBS対応） |
+| M5-1c サーバー統合 | API・DB・遅延生成フロー | API経由で生成→配信が動作 |
+| M5-1d クライアント統合 | パーイ・テクスチャ、生成トリガー、切替 | Quest 3 実機で立体感確認 |
+| M5-1e 品質調整 | 視差量チューニング、穴埋め品質、性能 | 実機で違和感なし・性能予算内 |
+
+### 11.10 リスクと対策
+
+| リスク | 影響 | 対策 |
+|---|---|---|
+| 深度推定の品質不足（段差アーティファクト） | 立体感の不自然さ | 視差量を控えめに（IPDの50%等）で設定可能に。Depth Anything V2 Base へのアップグレード余地 |
+| CPU推定が遅い（大量写真） | 初回表示待ち | 遅延生成で初回のみ。バックグラウンドバッチも将来可 |
+| SBS画像が大きい（メモリ） | QuestブラウザOOM | 長辺2048px上限＋LRU。WebP圧縮 |
+| onnxruntime が配布zipで動作しない | 配布形態の破綻 | pyruntime に onnxruntime を同梱検証。必要なら代替（OpenCV DNN） |
+| 顔なし写真の視差基準が不明 | 立体感の破綻 | 画像幅5%仮定 or ステレオ生成スキップ（stereo_status='skipped'） |
+
+### 11.11 「やらない」こと（M5-1 スコープ外）
+
+- 実ステレオペア（2枚撮影）の表示 → 将来の M5-2 候補
+- 動画のステレオ化 → 動画自体が未対応
+- リアルタイム深度推定（VR内で動的） → サーバー側バッチのみ
+- 深度マップの編集UI → スコープ外
