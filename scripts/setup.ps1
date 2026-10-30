@@ -1,8 +1,10 @@
-﻿# FullScale VR Photo Gallery 初回セットアップスクリプト
-# zip を展開（または GitHub から clone）した後、最初に一度だけ実行してください。
-#   1. Python 3.12 を探す（無ければ導入を案内して終了）
-#   2. .venv を作成し requirements.txt の依存を導入
-#   3. HTTPS 証明書を生成（scripts\setup-cert.ps1。mkcert は自動ダウンロード）
+﻿# FullScale VR Photo Gallery セットアップスクリプト
+# ※ 公式配布 zip 版は Python ランタイム（runtime\）と web\dist が同梱されているため、
+#   セットアップ不要です。fsvg.exe をダブルクリックするだけで起動します。
+#   このスクリプトは GitHub から clone した開発環境用（または証明書の再生成用）です。
+#   1. Python 3.12 を探す（無ければ導入を案内して終了）※ runtime\ 同梱ならスキップ
+#   2. .venv を作成し requirements.txt の依存を導入 ※ runtime\ 同梱ならスキップ
+#   3. HTTPS 証明書を生成（scripts\setup-cert.ps1。mkcert は zip 版は同梱、clone 版は自動ダウンロード）
 #   4. web\dist が無い場合のみ Web クライアントをビルド（zip 版は同梱済みのため通常スキップ。
 #      Node が無い場合は Node 22 を自動ダウンロード）
 # 使い方: powershell -ExecutionPolicy Bypass -File scripts\setup.ps1
@@ -14,6 +16,15 @@ Set-Location $root
 Write-Host '=== FullScale VR Photo Gallery セットアップ ==='
 Write-Host ''
 
+# ---- 0. 同梱ランタイムの有無（zip 版は Python/依存導入をスキップ） ----
+$hasRuntime = Test-Path (Join-Path $root 'runtime\python.exe')
+if ($hasRuntime) {
+    Write-Host 'Python ランタイム（runtime\）が同梱されているため、Python 探索と依存導入はスキップします。'
+    Write-Host '起動には fsvg.exe のダブルクリックだけで構いません（このスクリプトは証明書再生成など用）。'
+    Write-Host ''
+}
+
+if (-not $hasRuntime) {
 # ---- 1. Python 3.12 を探す ----
 function Find-Python312 {
     # PowerShell 5.1 では $ErrorActionPreference='Stop' の下、ネイティブコマンドの
@@ -68,6 +79,7 @@ Write-Host '依存パッケージをインストールします（数分かか�
 & $pyExe -m pip install --quiet --disable-pip-version-check -r requirements.txt
 if ($LASTEXITCODE -ne 0) { Write-Error 'pip install に失敗しました。ネットワークを確認して再実行してください。'; exit 1 }
 Write-Host '依存パッケージの導入完了'
+}
 
 # ---- 3. HTTPS 証明書生成 ----
 Write-Host ''
@@ -140,7 +152,11 @@ if (Test-Path $cfgPath) {
 }
 Write-Host ''
 Write-Host '=== セットアップ完了 ==='
-Write-Host '起動:  powershell -File scripts\start-server.ps1'
+if ($hasRuntime) {
+    Write-Host '起動:  fsvg.exe をダブルクリック（または powershell -File scripts\run.ps1）'
+} else {
+    Write-Host '起動:  powershell -File scripts\start-server.ps1'
+}
 Write-Host 'Quest 3（同一 Wi-Fi）のブラウザで:  https://<PCのIP>:<ポート>/'
 if ($ips.Count -gt 0) {
     Write-Host "  例: https://$($ips[0]):$port/"

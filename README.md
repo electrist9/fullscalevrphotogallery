@@ -15,32 +15,25 @@ PC の写真フォルダを、**Meta Quest 3 のブラウザ（HMD 単体・PC �
 |---|---|
 | PC | Windows 10/11（x64）。Quest 3 と**同一 Wi-Fi（LAN）**に接続 |
 | HMD | Meta Quest 3（Quest 3 専用で検証しています） |
-| Python | **3.12**（64-bit）。未導入なら [python.org](https://www.python.org/downloads/release/python-31214/) または `winget install -e --id Python.Python.3.12` |
-| ディスク | アプリ自体 約 20MB ＋ 写真フォルダ ＋ キャッシュ約 20MB |
+| Python | **不要**（zip にランタイムが同梱されています。インストールもダウンロードも不要です） |
+| ディスク | 展開後 約 500MB（zip 約 200MB）＋ 写真フォルダ ＋ キャッシュ約 20MB |
 
-> Python 3.12 を推奨します（依存ライブラリを 3.12 対応版でピン留めしているため。3.11 以下・3.13 以上では依存のインストールが失敗する可能性があります）。
+> セットアップにはインターネット接続も不要です（証明書生成ツール mkcert も同梱済み）。
 
-## 2. セットアップ（zip 版）
+## 2. 使い方（zip 版）
 
 1. リリース zip（`fsvg-vX.Y.Z.zip`）を好きな場所に展開します（例: `C:\` に展開すると `C:\fsvg-vX.Y.Z` フォルダができます）。
-2. PowerShell で展開後の `fsvg-vX.Y.Z` フォルダを開き、セットアップを 1 回だけ実行します:
+2. **`fsvg.exe` をダブルクリックするだけ**です。コンソールウィンドウが開き、サーバーが起動します。
+   - 初回は LAN 用自己署名証明書が自動生成されます（オフラインで完了）。
+   - ウィンドウ内に Quest 3 で開く URL（`https://<PCのIP>:8443/`）が表示されます。
+   - サーバーの停止は、ウィンドウを閉じるか Ctrl+C。
+   - 起動後、バックグラウンドで写真フォルダのインデックス（顔検出込み）が始まります。写真 100 枚で数分程度が目安です（インデックス中も閲覧できますが、未処理の写真は原寸大になりません）。
 
-   ```powershell
-   powershell -ExecutionPolicy Bypass -File scripts\setup.ps1
-   ```
+> **SmartScreen について**: 未署名の実行ファイルのため、初回起動時に「Windows が PC の保護をしました」と出ることがあります。「詳細情報」→「実行」を選択してください（出なければそのまま起動します）。
+>
+> **コマンドで起動する場合**: `powershell -ExecutionPolicy Bypass -File scripts\run.ps1`（`fsvg.exe` はこれを呼ぶだけのランチャーです）。
 
-   - Python 3.12 を探して `.venv` を作成し、依存パッケージをインストールします（数分かかることがあります）。
-   - HTTPS 証明書を自動生成します（mkcert は自動ダウンロード。PC の LAN IP を SAN に含みます）。
-   - Web クライアントは zip にビルド済み同梱のため、通常ビルドはスキップされます。
-3. サーバーを起動します:
-
-   ```powershell
-   powershell -File scripts\start-server.ps1
-   ```
-
-   起動後、バックグラウンドで写真フォルダのインデックス（顔検出込み）が始まります。写真 100 枚で数分程度が目安です（インデックス中も閲覧できますが、未処理の写真は原寸大になりません）。
-
-### GitHub から clone する場合
+### GitHub から clone する場合（開発者向け）
 
 ```powershell
 git clone https://github.com/electrist9/fullscalevrphotogallery
@@ -48,12 +41,12 @@ cd fullscalevrphotogallery
 powershell -ExecutionPolicy Bypass -File scripts\setup.ps1
 ```
 
-clone 版にはビルド済み `web\dist` が含まれないため、`setup.ps1` が Node.js 22 を自動ダウンロードしてビルドします（初回は数分かかります）。
+clone 版にはランタイムもビルド済み `web\dist` も含まれないため、`setup.ps1` が Python 3.12（要導入）と Node.js 22 を使って環境を作ります（インターネット必要・数分）。以降の起動は `powershell -File scripts\start-server.ps1`。
 
 ## 3. Quest 3 で開く
 
 1. PC と**同じ Wi-Fi**に接続した Quest 3 のブラウザを開きます。
-2. アドレスバーにサーバーの URL を入力します（`setup.ps1` / `start-server.ps1` が最後に表示します）:
+2. アドレスバーにサーバーの URL を入力します（`fsvg.exe` の起動ウィンドウに表示されます）:
 
    ```
    https://192.168.100.25:8443/     ← 例（PC の IP・ポートは環境による）
@@ -110,7 +103,7 @@ netsh advfirewall firewall add rule name="FSVR Gallery <ポート>" dir=in actio
 | 症状 | 対処 |
 |---|---|
 | Quest からページが開けない | サーバー起動中か／PC と Quest が同一 Wi-Fi か／PC の IP を確認。PC の IP が変わったら `powershell -File scripts\setup-cert.ps1` で証明書を再生成（IP を SAN に再含め）→ サーバー再起動 |
-| `setup.ps1` が Python 3.12 を見つけられない | `winget install -e --id Python.Python.3.12` で導入して再実行 |
+| `fsvg.exe` が起動しない | SmartScreen で「詳細情報」→「実行」。antivirus にブロックされていないか確認。または `powershell -ExecutionPolicy Bypass -File scripts\run.ps1` でエラーメッセージを確認 |
 | 写真が「原寸大」にならない | その写真の顔検出が未完了/失敗。インデックス完了を待つ、または写っている人の顔がはっきり分かる写真か確認 |
 | 表示が重い | 詳細は開発者向けドキュメント参照（通常は Quest 3 で快適に動作するよう調整済み） |
 | 証明書の警告が烦わしい | §3 の「任意」の CA 信頼登録、またはそのまま「続行」で利用 |
@@ -126,6 +119,9 @@ netsh advfirewall firewall add rule name="FSVR Gallery <ポート>" dir=in actio
 ```powershell
 powershell -File scripts\build-web.ps1    # Web クライアントのビルド（tools\node 使用・自動 DL）
 .venv\Scripts\python.exe -m pytest server\tests -q   # サーバーのテスト
+powershell -File scripts\build-runtime.ps1  # 配布用 Python ランタイムのビルド（tools\pyruntime）
+powershell -File scripts\build-launcher.ps1 # fsvg.exe ランチャーのビルド（csc.exe 使用）
+powershell -File scripts\make-release.ps1   # 配布 zip 生成（runtime/fsvg.exe 同梱）
 ```
 
 - ソース構成・設計は GitHub リポジトリの `ARCHITECTURE.md` / `PLAN.md` 参照。
