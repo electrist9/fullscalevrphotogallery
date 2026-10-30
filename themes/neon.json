@@ -1,0 +1,15 @@
+{
+  "id": "neon",
+  "name": "Neon",
+  "base": "#00bfff",
+  "accent": "#ff1493",
+  "vivid": 1.0,
+  "overrides": {
+    "heading": "#e9f2f5",
+    "aux": "#9fc0ca",
+    "hi": "#dd89b5",
+    "labelText": "#e9f2f5",
+    "albumLabelSel": "#e9f2f5",
+    "albumLabelUnsel": "#9fc0ca"
+  }
+}

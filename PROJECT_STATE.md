@@ -1,6 +1,6 @@
 # PROJECT_STATE.md — プロジェクト現在状態
 
-> 最終更新: 2026-10-30（Asia/Tokyo）／ 対象リポジトリ: `F:\fullscalevrphotogallery`（branch `main` @ `1cd8519`、**M4 完了・GitHub 公開済み・M5-1疑似ステレオ設計確定（PLAN §11）**）
+> 最終更新: 2026-10-30（Asia/Tokyo）／ 対象リポジトリ: `F:\fullscalevrphotogallery`（branch `main`、`feature/add-themes` マージ後。tip SHA は `& PortableGit\bin\git.exe log --oneline -1`。**M4 完了・GitHub 公開済み・M5-1疑似ステレオ設計確定（PLAN §11）・テーマシステム（内蔵plain＋サーバーテーマ6）**）
 > 本ファイルは別セッションのLLMが開発を継続するための状態記録。設計詳細は ARCHITECTURE.md、決定理由は DECISIONS.md、残作業は TODO.md。履歴の正典は PLAN.md（変更履歴セクション）。
 
 ## 1. プロジェクト概要
@@ -30,6 +30,7 @@ PC上の写真フォルダを、Quest 3 の WebXRブラウザ（HMD単体・PC�
 | 退出ボタン 🚪（⚙ の右）、2D→VRアルバム同期、情報パネル Xボタン トグル | OK |
 | 床グリッド Z-fighting 修正（grid y=0.001）、床接地ガイド帯の廃止 | 2026-10-29 OK |
 | config.json 設定3項目: `port` / `photos_root` / `album_mode` | 2026-10-29 OK |
+| テーマシステム（内蔵plain＋サーバーテーマ6: Cool/Forest/Neon/Noir/Violet/Warm。`themes/*.json`・JSON追加のみで反映） | 2026-10-30 OK |
 
 ## 3. 現在の設定（`config.json`、コミット済み・シークレット無し）
 
@@ -68,7 +69,7 @@ powershell -File scripts\build-web.ps1           # tools\node\node.exe + pnpm in
 powershell -File scripts\setup-cert.ps1          # tools\mkcert.exe で LAN IP 証明書
 
 # テスト
-.venv\Scripts\python.exe -m pytest server\tests -q   # 2026-10-29 時点: 21 passed
+.venv\Scripts\python.exe -m pytest server\tests -q   # 2026-10-30 時点: 22 passed
 ```
 
 Quest 3 での確認手順（確立済みワークフロー）: PCでサーバー起動 → Questブラウザで `https://192.168.100.25:<port>/` → 2Dページで「VR表示」→ immersive-vr。
@@ -108,7 +109,10 @@ Quest 3 での確認手順（確立済みワークフロー）: PCでサーバ�
 | `server/facedetect.py` | MediaPipe ラッパ（検出チェーン、`DETECT_VERSION`） |
 | `server/db.py` | SQLite スキーマ（`photos`/`faces`）＋ヘルパー |
 | `server/scale.py` | 原寸大スケール計算（mm/px・身長） |
-| `server/tests/` | pytest 21件（test_config 16 / test_scale 5） |
+| `server/tests/` | pytest 22件（test_config 17 / test_scale 5） |
+| `web/src/theme.ts` | テーマパレット定義（`Palette` 30スロット・`buildPalette` で base/accent 2色から導出＋`overrides`） |
+| `themes/*.json` | サーバーテーマ（1ファイル=1テーマ。`list_themes()` がリクエスト毎に読む。追加のみで反映・再起動不要） |
+| `THEME_DESIGN.md` | テーマ機能の設計（導出ルール・検算） |
 | `web/src/xrGallery.ts` | VRギャラリー本体（約1100行、最重要ファイル） |
 | `web/src/main.ts` / `gallery.ts` | 2Dページ |
 | `web/src/settings.ts` | localStorage 設定（`fsvg.*` キー） |
