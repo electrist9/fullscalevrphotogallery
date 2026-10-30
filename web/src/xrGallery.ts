@@ -7,10 +7,11 @@
 // XR設定: チップ行末尾の「⚙ 設定」で設定パネルを開く（2026-10-30 2画面化）。画面1=一覧（アイコン+ラベル+現在値。行トリガーで編集へ）、
 // 画面2=個別編集（大きな値+範囲バー+±ボタン。戻る/行外トリガーで一覧へ）。写真推定IPD（mm）・半身の目の高さ（m）・スクロール速度（rad/s）・詳細表示距離（m: 原寸大全身/原寸大半身/フィット）を localStorage 保存。
 import * as THREE from "three";
-import type { Photo } from "./api";
+import { fetchThemes, type Photo } from "./api";
 import { planeSizeMm } from "./photoPlane";
-import { getIpdMm, setIpdMm, getEyeLifeM, setEyeLifeM, EYE_LIFE_DEFAULT, EYE_LIFE_MIN, EYE_LIFE_MAX, getScrollRadPerSec, setScrollRadPerSec, SCROLL_DEFAULT, SCROLL_MIN, SCROLL_MAX, getDistLifeFullM, setDistLifeFullM, getDistLifeHalfM, setDistLifeHalfM, getDistFitM, setDistFitM, DIST_MIN, DIST_MAX, DIST_LIFE_FULL_DEFAULT, DIST_LIFE_HALF_DEFAULT, DIST_FIT_DEFAULT } from "./settings";
+import { getIpdMm, setIpdMm, getEyeLifeM, setEyeLifeM, EYE_LIFE_DEFAULT, EYE_LIFE_MIN, EYE_LIFE_MAX, getScrollRadPerSec, setScrollRadPerSec, SCROLL_DEFAULT, SCROLL_MIN, SCROLL_MAX, getDistLifeFullM, setDistLifeFullM, getDistLifeHalfM, setDistLifeHalfM, getDistFitM, setDistFitM, DIST_MIN, DIST_MAX, DIST_LIFE_FULL_DEFAULT, DIST_LIFE_HALF_DEFAULT, DIST_FIT_DEFAULT, getThemeName, setThemeName } from "./settings";
 import { createControllerRig, controllerRay, setRayLength, onControllerEvent, Locomotion } from "./xr-input";
+import { PLAIN_PALETTE, PLAIN_SPEC, buildPalette, type Palette, type ThemeSpec } from "./theme";
 
 const R = 3.4; // パネル配置半径 (m)
 const PANEL_H = 0.42; // サムパネル高さ (m)
@@ -63,7 +64,7 @@ interface SettingsPanel {
   bodyCanvas: HTMLCanvasElement;
   bodyTex: THREE.CanvasTexture;
   buttons: SettingsButton[];
-  mode: "list" | "detail"; // 2026-10-30 2画面化: 一覧 / 個別編集
+  mode: "list" | "detail" | "theme"; // 2026-10-30 2画面化: 一覧 / 個別編集。+ テーマ選択画面
   detailKey: string | null; // mode=detail の編集対象
   hoverKey: string | null; // 一覧でレイが当たっている行の action（変化時のみCanvas再描画）
 }
@@ -81,8 +82,20 @@ interface Detail {
   distM: number; // 開いたときに適用された表示距離 (m)。情報ラベル表示用
 }
 
-export async function startXRGallery(photos: Photo[], initialAlbum: string | null = null): Promise<void> {
+export async function startXRGallery(photos: Photo[], initialAlbum: string | null, palette: Palette, serverThemes: ThemeSpec[]): Promise<void> {
   if (!navigator.xr) throw new Error("navigator.xr がありません（HTTPSとWebXR対応ブラウザが必要）");
+  let pal = palette; // 現在適用中のカラーパレット。テーマ切替で再代入→room/grid/chips 再構築
+  const themes = serverThemes; // サーバ配信テーマ（内蔵 plain は含まない。ピッカー列挙と名前解決に使用）
+  // テーマ選択画面の選択肢（内蔵 plain を先頭、続いてサーバ配信テーマ）。swatch=base色。
+  const themeOptions = (): { id: string; name: string; base: string }[] => [
+    { id: "plain", name: PLAIN_SPEC.name, base: PLAIN_SPEC.base },
+    ...themes.map((t) => ({ id: t.id, name: t.name, base: t.base })),
+  ];
+  // 保存済みテーマ名 → 表示名（不明名は plain 表示）。
+  const themeDisplayName = (id: string): string => {
+    const opt = themeOptions().find((t) => t.id === id);
+    return opt ? opt.name : "Plain";
+  };
   let ipdMm = getIpdMm(); // 写真推定IPD (mm)。XR設定パネルで変更・localStorage保存（settings.ts）
   let eyeLifeM = getEyeLifeM(); // 半身原寸大の目の高さ (m)。XR設定パネルで変更・localStorage保存（2026-10-26 要望）
   let scrollSpeed = getScrollRadPerSec(); // 2026-10-28 要望: 右スティック最大倒し時のスクロール角速度 (rad/s)。設定パネルで変更可・localStorage保存
@@ -103,7 +116,7 @@ export async function startXRGallery(photos: Photo[], initialAlbum: string | nul
   await renderer.xr.setSession(session);
 
   const scene = new THREE.Scene();
-  scene.background = new THREE.Color(0x0b0d10);
+  // 背景・フォグは buildRoom(scene, pal) 内で pal から設定する（テーマ切替で再構築）
   const camera = new THREE.PerspectiveCamera(70, 1, 0.05, 100);
   const player = new THREE.Group();
   player.add(camera);
@@ -118,7 +131,7 @@ export async function startXRGallery(photos: Photo[], initialAlbum: string | nul
     return t;
   };
 
-  buildRoom(scene);
+  let roomGroup = buildRoom(scene, pal);
 
   // M3アルバム: サブフォルダ単位でグリッドを切り替える（null=すべて）
   const albums = deriveAlbums(photos);
@@ -208,7 +221,7 @@ export async function startXRGallery(photos: Photo[], initialAlbum: string | nul
       const it = slots[i];
       const photo = visiblePhotos[i];
       const group = new THREE.Group();
-      const frameMat = new THREE.MeshBasicMaterial({ color: 0x2c3038 });
+      const frameMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(pal.frame) });
       const frame = new THREE.Mesh(new THREE.PlaneGeometry(it.pw + 0.04, it.ph + 0.04), frameMat);
       frame.position.z = -0.006;
       group.add(frame);
@@ -280,12 +293,12 @@ export async function startXRGallery(photos: Photo[], initialAlbum: string | nul
   let hoverLabelName: string | null = null;
   const drawHoverLabel = (name: string) => {
     const ctx = hoverCanvas.getContext("2d")!;
-    ctx.fillStyle = "rgba(20,22,26,0.85)";
+    ctx.fillStyle = pal.labelBg;
     ctx.fillRect(0, 0, hoverCanvas.width, hoverCanvas.height);
     ctx.font = "40px system-ui, sans-serif";
     ctx.textBaseline = "middle";
     ctx.textAlign = "center";
-    ctx.fillStyle = "#e8eaed";
+    ctx.fillStyle = pal.labelText;
     ctx.fillText(truncate(name, 40), hoverCanvas.width / 2, hoverCanvas.height / 2);
     hoverTex.needsUpdate = true;
   };
@@ -346,7 +359,7 @@ export async function startXRGallery(photos: Photo[], initialAlbum: string | nul
 
   const buildChip = (it: ChipItem): Chip => {
     const group = new THREE.Group();
-    const frameMat = new THREE.MeshBasicMaterial({ color: 0x14161a }); // 枠は黒（ホバー/選択時のみ青）
+    const frameMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(pal.chipFrame) }); // 枠はチップ面色（ホバー/選択時のみアクセント色）
     const frame = new THREE.Mesh(new THREE.PlaneGeometry(it.fw + 0.04, it.fh + 0.04), frameMat); // 枠はサムネイルに密着（高さは写真アスペクトで可変）
     frame.position.z = -0.006;
     group.add(frame);
@@ -356,7 +369,7 @@ export async function startXRGallery(photos: Photo[], initialAlbum: string | nul
     );
     face.userData.album = it.album;
     group.add(face);
-    const label = makeLabel(truncate(it.label, CHIP_LABEL_MAX), it.fw, 0.045); // 名下ラベル（フォント4.5cm）
+    const label = makeLabel(truncate(it.label, CHIP_LABEL_MAX), it.fw, pal, 0.045); // 名下ラベル（フォント4.5cm）
     label.position.set(0, -(it.fh / 2 + 0.075), 0.004);
     group.add(label);
     chipContainer.add(group);
@@ -398,8 +411,8 @@ export async function startXRGallery(photos: Photo[], initialAlbum: string | nul
   // ⚙設定ボタン（固定。一覧画像のファイル名ラベルの直下、歯車アイコンのみ。2026-10-28 要望）
   const settingsChipGroup = new THREE.Group();
   settingsChipGroup.position.set(0, SETTINGS_BTN_Y, -R + 0.06); // ファイル名ラベルと同じ正面平面（円弧中央、回転なしで原点を向く）
-  const settingsChipFrameMat = new THREE.MeshBasicMaterial({ color: 0x14161a });
-  const settingsIcon = makeLabel("⚙", 0, 0.06); // 歯車アイコンのみ（フォント6cm）
+  const settingsChipFrameMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(pal.settingsChipFrame) });
+  const settingsIcon = makeLabel("⚙", 0, pal, 0.06); // 歯車アイコンのみ（フォント6cm）
   const iconW = (settingsIcon.geometry as THREE.PlaneGeometry).parameters.width;
   const iconH = (settingsIcon.geometry as THREE.PlaneGeometry).parameters.height;
   {
@@ -409,7 +422,7 @@ export async function startXRGallery(photos: Photo[], initialAlbum: string | nul
   }
   const settingsChipMesh = new THREE.Mesh(
     new THREE.PlaneGeometry(iconW, iconH),
-    new THREE.MeshBasicMaterial({ color: 0x14161a }),
+    new THREE.MeshBasicMaterial({ color: new THREE.Color(pal.chipFace) }),
   );
   settingsChipMesh.userData.settings = true;
   settingsChipGroup.add(settingsChipMesh);
@@ -419,8 +432,8 @@ export async function startXRGallery(photos: Photo[], initialAlbum: string | nul
 
   // 没入モード終了ボタン（固定。⚙ボタンの右、同じ正面平面。押すと immersive-vr セッションを終了し 2D ページ（ブラウザ）へ戻る。2026-10-28 要望・案A）
   const exitChipGroup = new THREE.Group();
-  const exitChipFrameMat = new THREE.MeshBasicMaterial({ color: 0x14161a });
-  const exitIcon = makeLabel("🚪", 0, 0.06); // ドアアイコンのみ（フォント6cm）
+  const exitChipFrameMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(pal.exitChipFrame) });
+  const exitIcon = makeLabel("🚪", 0, pal, 0.06); // ドアアイコンのみ（フォント6cm）
   const exitW = (exitIcon.geometry as THREE.PlaneGeometry).parameters.width;
   const exitH = (exitIcon.geometry as THREE.PlaneGeometry).parameters.height;
   exitChipGroup.position.set((iconW + exitW) / 2 + 0.06, SETTINGS_BTN_Y, -R + 0.06); // ⚙の枠と2cm空けて右隣
@@ -431,7 +444,7 @@ export async function startXRGallery(photos: Photo[], initialAlbum: string | nul
   }
   const exitChipMesh = new THREE.Mesh(
     new THREE.PlaneGeometry(exitW, exitH),
-    new THREE.MeshBasicMaterial({ color: 0x14161a }),
+    new THREE.MeshBasicMaterial({ color: new THREE.Color(pal.chipFace) }),
   );
   exitChipMesh.userData.exit = true;
   exitChipGroup.add(exitChipMesh);
@@ -439,7 +452,7 @@ export async function startXRGallery(photos: Photo[], initialAlbum: string | nul
   exitChipGroup.add(exitIcon);
   scene.add(exitChipGroup);
 
-  const rig = createControllerRig(renderer, player);
+  const rig = createControllerRig(renderer, player, pal);
   const loco = new Locomotion();
   const raycaster = new THREE.Raycaster();
 
@@ -517,7 +530,7 @@ export async function startXRGallery(photos: Photo[], initialAlbum: string | nul
 
     const frame = new THREE.Mesh(
       new THREE.PlaneGeometry(wM + 0.06, mainHM + 0.06),
-      new THREE.MeshBasicMaterial({ color: 0x2c3038 }),
+      new THREE.MeshBasicMaterial({ color: new THREE.Color(pal.detailFrame) }),
     );
     frame.position.z = -0.008;
     if (useFold) frame.position.y = stripBelowM / 2 + 0.03; // フレーム下端を床面（y=0）に合わせる（折り目 y=0 + 枠3cm。2026-10-28 修正: 主プレインのずれに連動）
@@ -563,7 +576,7 @@ export async function startXRGallery(photos: Photo[], initialAlbum: string | nul
       distM,
     };
 
-    d.label = makeLabel(detailLines(d), Math.min(Math.max(wM, 0.9), 1.7));
+    d.label = makeLabel(detailLines(d), Math.min(Math.max(wM, 0.9), 1.7), pal);
     let labelY = photoGroup.position.y - (hM * photoGroup.scale.x) / 2 - 0.12;
     if (feetOnFloor) labelY = Math.max(labelY, 0.06); // 足元接地で画像下端が床より下でもラベルは床より上
     d.label.position.y = labelY;
@@ -708,24 +721,24 @@ export async function startXRGallery(photos: Photo[], initialAlbum: string | nul
   const drawSettingsBody = (sp: SettingsPanel) => {
     const c = sp.bodyCanvas;
     const ctx = c.getContext("2d")!;
-    ctx.fillStyle = "rgba(20,22,26,0.92)";
+    ctx.fillStyle = pal.infoBarBg;
     ctx.fillRect(0, 0, c.width, c.height);
     ctx.textBaseline = "top";
     if (sp.mode === "list") {
-      // 画面1: 一覧。行の背景帯（hover で青）は 3D 側、テキストのみ描画。
+      // 画面1: 一覧。行の背景帯（hover でアクセント色）は 3D 側、テキストのみ描画。
       // 1行=86px・上端118px（当たり面 mesh の y 対応: 1px = bodyH/canvas.height m）
-      ctx.fillStyle = "#e8eaed";
+      ctx.fillStyle = pal.heading;
       ctx.font = "44px system-ui, sans-serif";
       ctx.fillText("設定", 24, 14);
-      ctx.fillStyle = "#9aa5b1";
+      ctx.fillStyle = pal.aux;
       ctx.font = "26px system-ui, sans-serif";
       ctx.fillText("行にトリガー=編集 / 他をトリガー=閉じる", 24, 72);
       settingDefs.forEach((d, i) => {
         const y = 118 + i * 86;
-        // 行の背景帯（hover で青）。Canvas 側に描画するので本文テキストを隠さない（2026-10-30 不具合修正）
-        ctx.fillStyle = sp.hoverKey === `open_${d.key}` ? "#2f6feb" : "rgba(44,48,56,0.55)";
+        // 行の背景帯（hover でアクセント色）。Canvas 側に描画するので本文テキストを隠さない（2026-10-30 不具合修正）
+        ctx.fillStyle = sp.hoverKey === `open_${d.key}` ? pal.hover : withAlpha(pal.frame, 0.55);
         ctx.fillRect(26, y, c.width - 52, 78);
-        ctx.fillStyle = "#dfe3e8";
+        ctx.fillStyle = pal.hi;
         ctx.font = "38px system-ui, sans-serif";
         ctx.fillText(`${d.icon} ${d.label}`, 40, y + 22);
         ctx.textAlign = "right";
@@ -734,10 +747,54 @@ export async function startXRGallery(photos: Photo[], initialAlbum: string | nul
         ctx.fillText(`${d.get().toFixed(d.decimals)} ${d.unit}`, c.width - 40, y + 18);
         ctx.textAlign = "left";
       });
+      // 最終行: テーマ選択（🎨）。値は現在適用中のテーマ名。
+      {
+        const y = 118 + settingDefs.length * 86;
+        ctx.fillStyle = sp.hoverKey === "open_theme" ? pal.hover : withAlpha(pal.frame, 0.55);
+        ctx.fillRect(26, y, c.width - 52, 78);
+        ctx.fillStyle = pal.hi;
+        ctx.font = "38px system-ui, sans-serif";
+        ctx.fillText("🎨 テーマ", 40, y + 22);
+        ctx.textAlign = "right";
+        ctx.fillStyle = "#ffffff";
+        ctx.font = "44px system-ui, sans-serif";
+        ctx.fillText(themeDisplayName(getThemeName()), c.width - 40, y + 18);
+        ctx.textAlign = "left";
+      }
+    } else if (sp.mode === "theme") {
+      // テーマ選択画面。左上150px幅は「戻る」ボタンの空き（3D ボタンを重畳）。
+      ctx.fillStyle = pal.heading;
+      ctx.font = "44px system-ui, sans-serif";
+      ctx.fillText("テーマ", 24, 14);
+      ctx.fillStyle = pal.aux;
+      ctx.font = "26px system-ui, sans-serif";
+      ctx.fillText("行にトリガー=そのテーマへ切替", 24, 72);
+      const cur = getThemeName();
+      themeOptions().forEach((t, i) => {
+        const y = 118 + i * 86;
+        ctx.fillStyle = sp.hoverKey === `theme_${t.id}` ? pal.hover : withAlpha(pal.frame, 0.55);
+        ctx.fillRect(26, y, c.width - 52, 78);
+        // スウォッチ（base色）
+        ctx.fillStyle = t.base;
+        ctx.fillRect(44, y + 19, 40, 40);
+        ctx.strokeStyle = pal.hi;
+        ctx.lineWidth = 2;
+        ctx.strokeRect(44, y + 19, 40, 40);
+        ctx.fillStyle = pal.hi;
+        ctx.font = "38px system-ui, sans-serif";
+        ctx.fillText(t.name, 104, y + 22);
+        if (t.id === cur) {
+          ctx.textAlign = "right";
+          ctx.fillStyle = pal.heading;
+          ctx.font = "40px system-ui, sans-serif";
+          ctx.fillText("✔ 適用中", c.width - 40, y + 20);
+          ctx.textAlign = "left";
+        }
+      });
     } else {
       // 画面2: 個別編集。左上150px幅は「戻る」ボタンの空き（3D ボタンを重畳）
       const d = settingDefs.find((x) => x.key === sp.detailKey)!;
-      ctx.fillStyle = "#e8eaed";
+      ctx.fillStyle = pal.heading;
       ctx.font = "40px system-ui, sans-serif";
       ctx.fillText(`${d.icon} ${d.label}`, 170, 26);
       ctx.textAlign = "center";
@@ -751,20 +808,20 @@ export async function startXRGallery(photos: Photo[], initialAlbum: string | nul
       const by = 250;
       const bh = 26;
       const t = (v - d.min) / (d.max - d.min);
-      ctx.fillStyle = "#2c3038";
+      ctx.fillStyle = pal.frame;
       ctx.fillRect(bx, by, bw, bh);
-      ctx.fillStyle = v <= d.min || v >= d.max ? "#d64545" : "#2f6feb";
+      ctx.fillStyle = v <= d.min || v >= d.max ? "#d64545" : pal.hover;
       ctx.fillRect(bx, by, Math.max(6, bw * t), bh);
-      ctx.fillStyle = "#e8eaed";
+      ctx.fillStyle = pal.heading;
       ctx.fillRect(bx + bw * t - 3, by - 8, 6, bh + 16);
       ctx.font = "24px system-ui, sans-serif";
-      ctx.fillStyle = "#9aa5b1";
+      ctx.fillStyle = pal.aux;
       ctx.textAlign = "left";
       ctx.fillText(d.min.toFixed(d.decimals), bx, by + 42);
       ctx.textAlign = "right";
       ctx.fillText(d.max.toFixed(d.decimals), bx + bw, by + 42);
       ctx.textAlign = "center";
-      ctx.fillStyle = "#9aa5b1";
+      ctx.fillStyle = pal.aux;
       ctx.font = "26px system-ui, sans-serif";
       ctx.fillText(d.hint, c.width / 2, c.height - 46);
       ctx.textAlign = "left";
@@ -780,13 +837,14 @@ export async function startXRGallery(photos: Photo[], initialAlbum: string | nul
   };
 
   // mode=list: 一覧（行=当たり面+背景帯、トリガーで編集へ） / mode=detail: 個別編集（戻る+±ボタン5個）
-  const openSettings = (mode: "list" | "detail", detailKey?: string) => {
+  const openSettings = (mode: "list" | "detail" | "theme", detailKey?: string) => {
     closeSettings();
     const root = new THREE.Group();
 
     const canvas = document.createElement("canvas");
     canvas.width = 1024;
-    canvas.height = mode === "list" ? 640 : 512; // 2026-10-30 2画面化（旧 1152 一枚絵から縮小）
+    // 一覧=7行（設定6 + テーマ1）で720px、テーマ画面=テーマ数に応じて動的、編集=512px。
+    canvas.height = mode === "list" ? 720 : mode === "theme" ? 118 + themeOptions().length * 86 + 78 + 10 : 512;
     const tex = new THREE.CanvasTexture(canvas);
     tex.colorSpace = THREE.SRGBColorSpace;
     tex.anisotropy = 4;
@@ -807,19 +865,19 @@ export async function startXRGallery(photos: Photo[], initialAlbum: string | nul
     const addButton = (text: string, action: string, x: number, y: number, w = 0.2, h = 0.11) => {
       const g = new THREE.Group();
       g.position.set(x, y, 0.01); // 本文Canvasの手前に重ねる
-      const frameMat = new THREE.MeshBasicMaterial({ color: 0x2c3038 });
+      const frameMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(pal.frame) });
       const frame = new THREE.Mesh(new THREE.PlaneGeometry(w + 0.03, h + 0.03), frameMat);
       frame.position.z = -0.006;
       frame.renderOrder = 2; // 本文(renderOrder=1)より確実に前面。不透明面は深度だけ書き、本文の描画を消さない
       g.add(frame);
       const face = new THREE.Mesh(
         new THREE.PlaneGeometry(w, h),
-        new THREE.MeshBasicMaterial({ color: 0x1d2025 }),
+        new THREE.MeshBasicMaterial({ color: new THREE.Color(pal.detailFace) }),
       );
       face.userData.action = action;
       face.renderOrder = 2;
       g.add(face);
-      const lab = makeLabel(text, w - 0.08);
+      const lab = makeLabel(text, w - 0.08, pal);
       lab.position.z = 0.004;
       lab.renderOrder = 3; // ボタン面より確実に前面
       g.add(lab);
@@ -830,7 +888,7 @@ export async function startXRGallery(photos: Photo[], initialAlbum: string | nul
     if (mode === "list") {
       // 画面1: 行の当たり面のみ（透明 face）。背景帯は drawSettingsBody が Canvas 側に描画し、
       // hover 変化を render ループが hoverKey として検知して再描画する（2026-10-30 不具合修正: 3D帯が前面で文字を隠していた）
-      settingDefs.forEach((d, i) => {
+      const addRow = (action: string, i: number) => {
         const cy = top - (118 + i * 86 + 43) * px; // 行中心
         const rowW = bodyW - 0.06;
         const rowH = 86 * px - 0.008;
@@ -843,11 +901,32 @@ export async function startXRGallery(photos: Photo[], initialAlbum: string | nul
           // renderOrder:2 で本文より確実に後着順。raycast は material 設定に依存しないので当たり判定は不変。
           new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false }),
         );
-        face.userData.action = `open_${d.key}`;
+        face.userData.action = action;
         face.renderOrder = 2;
         g.add(face);
         root.add(g);
-        buttons.push({ group: g, mesh: face, action: `open_${d.key}` });
+        buttons.push({ group: g, mesh: face, action });
+      };
+      settingDefs.forEach((d, i) => addRow(`open_${d.key}`, i));
+      addRow("open_theme", settingDefs.length); // 最終行: テーマ選択へ
+    } else if (mode === "theme") {
+      // テーマ選択画面: 各テーマ行の当たり面（透明 face）+ 左上「戻る」ボタン。
+      addButton("← 戻る", "back", -bodyW / 2 + 0.115, top - 56 * px, 0.16, 0.1);
+      themeOptions().forEach((t, i) => {
+        const cy = top - (118 + i * 86 + 43) * px;
+        const rowW = bodyW - 0.06;
+        const rowH = 86 * px - 0.008;
+        const g = new THREE.Group();
+        g.position.set(0, cy, 0.005);
+        const face = new THREE.Mesh(
+          new THREE.PlaneGeometry(rowW, rowH),
+          new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false }),
+        );
+        face.userData.action = `theme_${t.id}`;
+        face.renderOrder = 2;
+        g.add(face);
+        root.add(g);
+        buttons.push({ group: g, mesh: face, action: `theme_${t.id}` });
       });
     } else {
       // 画面2: 個別編集。左上「戻る」+ 下部に ±ボタン5個（Canvas 上端から px で対応）
@@ -886,9 +965,33 @@ export async function startXRGallery(photos: Photo[], initialAlbum: string | nul
     settings = sp;
   };
 
+  // テーマ切替（THEME_DESIGN.md §5）。サーバ配信テーマ一覧は起動時に取得済みなので同期処理で足りる。
+  // pal を再代入 → 部屋/グリッド/チップをその場で再構築（ページリロードなし）。
+  const switchTheme = (id: string) => {
+    setThemeName(id);
+    const spec = id === "plain" ? null : themes.find((t) => t.id === id);
+    pal = spec ? buildPalette(spec) : PLAIN_PALETTE;
+    scene.remove(roomGroup);
+    const roomTex = roomGroup.userData.roomTextures as THREE.Texture[] | undefined;
+    if (roomTex) for (const t of roomTex) t.dispose();
+    disposeSubtree(roomGroup);
+    roomGroup = buildRoom(scene, pal);
+    rebuildGrid();
+    rebuildChips();
+    openSettings("theme"); // 選択中マーカー更新のためテーマ画面を開き直す
+  };
+
   const applySettingsAction = (action: string) => {
     if (action === "back") {
       openSettings("list");
+      return;
+    }
+    if (action === "open_theme") {
+      openSettings("theme");
+      return;
+    }
+    if (action.startsWith("theme_")) {
+      switchTheme(action.slice(6));
       return;
     }
     if (action.startsWith("open_")) {
@@ -1039,7 +1142,7 @@ export async function startXRGallery(photos: Photo[], initialAlbum: string | nul
     let hoverName: string | null = null;
     for (const p of panels) {
       const on = hovered.has(p.mesh);
-      p.frameMat.color.setHex(on ? 0x2f6feb : 0x2c3038);
+      p.frameMat.color.set(on ? pal.hover : pal.frame);
       p.group.scale.setScalar(on ? 1.06 : 1);
       if (on) hoverName = (p.mesh.userData.photo as Photo).filename;
     }
@@ -1052,19 +1155,19 @@ export async function startXRGallery(photos: Photo[], initialAlbum: string | nul
     for (const ch of chips) {
       const on = hovered.has(ch.mesh);
       const sel = ch.album === currentAlbum;
-      ch.frameMat.color.setHex(on || sel ? 0x2f6feb : 0x14161a); // 非ホバー・非選択は枠を黒（面・ラベル背景と同色）に
+      ch.frameMat.color.set(on || sel ? pal.chipHover : pal.chipFrame); // 非ホバー・非選択は枠をチップ面色（面・ラベル背景と同色）に
       ch.group.scale.setScalar(on ? 1.06 : 1);
     }
     // 2026-10-28: ⚙設定ボタン（ファイル名ラベル下・固定）のホバー枠
-    settingsChipFrameMat.color.setHex(hovered.has(settingsChipMesh) ? 0x2f6feb : 0x14161a);
+    settingsChipFrameMat.color.set(hovered.has(settingsChipMesh) ? pal.settingsChipHover : pal.settingsChipFrame);
     settingsChipGroup.scale.setScalar(hovered.has(settingsChipMesh) ? 1.06 : 1);
-    exitChipFrameMat.color.setHex(hovered.has(exitChipMesh) ? 0x2f6feb : 0x14161a);
+    exitChipFrameMat.color.set(hovered.has(exitChipMesh) ? pal.exitChipHover : pal.exitChipFrame);
     exitChipGroup.scale.setScalar(hovered.has(exitChipMesh) ? 1.06 : 1);
     for (const b of settings?.buttons ?? []) {
-      if (b.frameMat) b.frameMat.color.setHex(hovered.has(b.mesh) ? 0x2f6feb : 0x2c3038);
+      if (b.frameMat) b.frameMat.color.set(hovered.has(b.mesh) ? pal.hover : pal.frame);
     }
     // 2026-10-30 一覧行の hover 帯: Canvas 側描画なので、当たった行が変わったフレームだけ再描画
-    if (settings && settings.mode === "list") {
+    if (settings && (settings.mode === "list" || settings.mode === "theme")) {
       let hk: string | null = null;
       for (const b of settings.buttons) {
         if (hovered.has(b.mesh)) {
@@ -1106,10 +1209,14 @@ function raycastPanel(
   return hits.length > 0 ? hits[0] : null;
 }
 
-function buildRoom(scene: THREE.Scene): void {
+function buildRoom(scene: THREE.Scene, pal: Palette): THREE.Group {
   // 空間デザイン 2026-10-30: シーンフォグ＋床径向グラデ＋壁垂直グラデ（無限グリッド感の解消）
-  const BG = 0x0b0d10;
-  scene.fog = new THREE.FogExp2(BG, 0.15);
+  // 2026-10-30 テーマ: 全色を pal から導出。背景・フォグもここで設定（テーマ切替で roomGroup を再構築）
+  scene.background = new THREE.Color(pal.bg);
+  scene.fog = new THREE.FogExp2(new THREE.Color(pal.fog).getHex(), pal.fogDensity);
+
+  const roomGroup = new THREE.Group();
+  roomGroup.name = "room";
 
   // 床: 径向グラデーション（中心=明るい → 外周=背景色）で「無限」感を解消
   const floorCanvas = document.createElement("canvas");
@@ -1117,10 +1224,10 @@ function buildRoom(scene: THREE.Scene): void {
   floorCanvas.height = 512;
   const fctx = floorCanvas.getContext("2d")!;
   const fgrad = fctx.createRadialGradient(256, 256, 0, 256, 256, 256);
-  fgrad.addColorStop(0, "#4a5568");
-  fgrad.addColorStop(0.35, "#2a3040");
-  fgrad.addColorStop(0.7, "#141820");
-  fgrad.addColorStop(1, "#0b0d10");
+  fgrad.addColorStop(0, pal.floorCenter);
+  fgrad.addColorStop(0.35, pal.floorMid1);
+  fgrad.addColorStop(0.7, pal.floorMid2);
+  fgrad.addColorStop(1, pal.floorEdge);
   fctx.fillStyle = fgrad;
   fctx.fillRect(0, 0, 512, 512);
   const floorTex = new THREE.CanvasTexture(floorCanvas);
@@ -1131,14 +1238,14 @@ function buildRoom(scene: THREE.Scene): void {
     new THREE.MeshBasicMaterial({ map: floorTex }),
   );
   floor.rotation.x = -Math.PI / 2;
-  scene.add(floor);
+  roomGroup.add(floor);
 
   // グリッド: 残すがフォグで距離減衰。線色を明るくして近距離での参照点として機能させる
-  const grid = new THREE.GridHelper((R + 3.5) * 2, 28, 0x6a7585, 0x4a5568);
+  const grid = new THREE.GridHelper((R + 3.5) * 2, 28, new THREE.Color(pal.gridMajor).getHex(), new THREE.Color(pal.gridMinor).getHex());
   // 2026-10-28 実機指摘: 床折り曲げストリップ（y=0.002）と同一高さでZ-fightingし、
   // グリッド線が写真ストリップの上に見えた。グリッドを1mm下げてストリップを確実に上に（深度精度はµm規模で1mm差は十分）
   grid.position.y = 0.001;
-  scene.add(grid);
+  roomGroup.add(grid);
 
   // 壁: 垂直グラデーション（下部=明るい → 上部=背景色）で空間の輪郭を自然に示す
   const wallCanvas = document.createElement("canvas");
@@ -1146,9 +1253,9 @@ function buildRoom(scene: THREE.Scene): void {
   wallCanvas.height = 256;
   const wctx = wallCanvas.getContext("2d")!;
   const wgrad = wctx.createLinearGradient(0, 0, 0, 256);
-  wgrad.addColorStop(0, "#0b0d10");   // 上部（天井側）→ 背景色に溶ける
-  wgrad.addColorStop(0.5, "#1e2530");
-  wgrad.addColorStop(1, "#3a4555");   // 下部（床側）→ 壁色（明確に明るい）
+  wgrad.addColorStop(0, pal.wallTop);      // 上部（天井側）→ 背景色に溶ける
+  wgrad.addColorStop(0.5, pal.wallMid);
+  wgrad.addColorStop(1, pal.wallBottom);   // 下部（床側）→ 壁色（明確に明るい）
   wctx.fillStyle = wgrad;
   wctx.fillRect(0, 0, 4, 256);
   const wallTex = new THREE.CanvasTexture(wallCanvas);
@@ -1159,7 +1266,14 @@ function buildRoom(scene: THREE.Scene): void {
     new THREE.MeshBasicMaterial({ map: wallTex, side: THREE.BackSide }),
   );
   wall.position.y = 2;
-  scene.add(wall);
+  roomGroup.add(wall);
+
+  // 部屋固有の手続き的テクスチャ（勾配Canvas）。テーマ切替で roomGroup を破棄する際、
+  // disposeSubtree は material.map を共有キャッシュと混同して消さないため、ここで保持して switchTheme 側で明示的に dispose する。
+  roomGroup.userData.roomTextures = [floorTex, wallTex];
+
+  scene.add(roomGroup);
+  return roomGroup;
 }
 
 // 写真一覧からアルバム（''=直下）を件数＋先頭画像付きで抽出。'' は先頭、以降は名前順。
@@ -1180,9 +1294,17 @@ function truncate(s: string, n: number): string {
   return s.length <= n ? s : s.slice(0, n - 1) + "…";
 }
 
+// "#rrggbb" → "rgba(r,g,b,a)"。設定パネルの半透明な行帯など、パレット色にアルファを付ける用途。
+function withAlpha(hex: string, a: number): string {
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  return `rgba(${r},${g},${b},${a})`;
+}
+
 // キャンバス→CanvasTexture でテキストパネル（フォント読み込み不要）
 // fontWorldH 指定時は Canvas を文字数分の幅に保ったまま、ワールド上のフォント高さだけ固定にする（チップラベル用）
-function makeLabel(lines: string[] | string, worldW: number, fontWorldH?: number): THREE.Mesh {
+function makeLabel(lines: string[] | string, worldW: number, pal: Palette, fontWorldH?: number): THREE.Mesh {
   const arr = Array.isArray(lines) ? lines : [lines];
   const pad = 12;
   const fontPx = arr.length === 1 ? 40 : 30;
@@ -1196,10 +1318,10 @@ function makeLabel(lines: string[] | string, worldW: number, fontWorldH?: number
   let ctx = canvas.getContext("2d")!; // resize で状態はリセットされる
   ctx.font = `${fontPx}px system-ui, sans-serif`;
   ctx.textBaseline = "top";
-  ctx.fillStyle = "rgba(20,22,26,0.85)";
+  ctx.fillStyle = pal.labelBg;
   ctx.fillRect(0, 0, canvas.width, canvas.height);
   for (let i = 0; i < arr.length; i++) {
-    ctx.fillStyle = i === 0 ? "#e8eaed" : "#9aa5b1";
+    ctx.fillStyle = i === 0 ? pal.labelText : pal.aux;
     ctx.fillText(arr[i], pad, pad + i * lineH);
   }
   const tex = new THREE.CanvasTexture(canvas);

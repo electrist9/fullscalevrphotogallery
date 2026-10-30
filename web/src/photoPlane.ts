@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import type { Photo } from "./api";
+import type { Palette } from "./theme";
 
 // 原寸大平面: mm_per_px = ipd_real / pupil_px（PLAN §4.2、server/scale.py と同じ計算）
 // 姿勢補正 pupil_px/cos(yaw)、安全クランプ 0.3〜3.0m、顔なしは高さ1.0m固定フォールバック。
@@ -50,14 +51,14 @@ export function planeSizeMm(p: Photo, ipdMm: number): PlaneScale {
 
 export interface ViewerHandle { dispose(): void }
 
-export function openViewer(container: HTMLElement, p: Photo, ipdMm: number): ViewerHandle {
+export function openViewer(container: HTMLElement, p: Photo, ipdMm: number, pal: Palette): ViewerHandle {
   const renderer = new THREE.WebGLRenderer({ antialias: true });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   renderer.setSize(container.clientWidth, container.clientHeight);
   container.appendChild(renderer.domElement);
 
   const scene = new THREE.Scene();
-  scene.background = new THREE.Color(0x101216);
+  scene.background = new THREE.Color(pal.viewerBg);
   const camera = new THREE.PerspectiveCamera(60, container.clientWidth / container.clientHeight, 0.01, 100);
 
   const { w, h, mmPerPx, source, clamped, lifeSize } = planeSizeMm(p, ipdMm);

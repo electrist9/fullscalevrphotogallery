@@ -1,7 +1,8 @@
-import { fetchIndexProgress, fetchPhotos, reindex, type IndexProgress, type Photo } from "./api";
+import { fetchIndexProgress, fetchPhotos, fetchThemes, reindex, type IndexProgress, type Photo } from "./api";
 import { renderGrid } from "./gallery";
 import { openViewer, type ViewerHandle } from "./photoPlane";
-import { getIpdMm, setIpdMm } from "./settings";
+import { getIpdMm, getThemeName, setIpdMm } from "./settings";
+import { PLAIN_PALETTE, buildPalette, type Palette, type ThemeSpec } from "./theme";
 import { startXRGallery } from "./xrGallery";
 
 const ipdInput = document.getElementById("ipd") as HTMLInputElement;
@@ -12,6 +13,26 @@ ipdInput.value = String(getIpdMm());
 
 let current: Photo | null = null;
 let handle: ViewerHandle | null = null;
+
+// テーマ（THEME_DESIGN.md §6.5/§7）。localStorage には名前だけ保存。サーバ配信一覧で名前解決し、
+// 見つからなければ内蔵 plain にフォールバック（保存名は保持）。2DビューアとVRの両方で同じ pal を使う。
+let serverThemes: ThemeSpec[] = [];
+let pal: Palette = PLAIN_PALETTE;
+
+async function resolveTheme(): Promise<void> {
+  try {
+    serverThemes = await fetchThemes();
+  } catch {
+    serverThemes = [];
+  }
+  const name = getThemeName();
+  if (name === "plain") {
+    pal = PLAIN_PALETTE;
+    return;
+  }
+  const spec = serverThemes.find((t) => t.id === name);
+  pal = spec ? buildPalette(spec) : PLAIN_PALETTE;
+}
 
 function closeViewer() {
   handle?.dispose();
@@ -24,7 +45,7 @@ function showPhoto(p: Photo) {
   closeViewer();
   current = p;
   viewer.classList.add("active");
-  handle = openViewer(viewer, p, getIpdMm());
+  handle = openViewer(viewer, p, getIpdMm(), pal);
 }
 
 document.getElementById("back")!.addEventListener("click", closeViewer);
@@ -148,9 +169,10 @@ vrBtn.addEventListener("click", async () => {
   statusEl.textContent = "VRセッション開始中…（ヘッドセットを着用してください）";
   try {
     const photos = await fetchPhotos();
+    await resolveTheme(); // VR起動直前にサーバテーマを再解決（テーマ追加/変更を反映）
     // 2026-10-28 要望: 2Dページで選択中のアルバムを VR に引き継ぐ（「すべて」は null）
     const v = albumSel.value;
-    await startXRGallery(photos, v === "__all__" ? null : v); // 写真推定IPDは xrGallery 内で settings.ts（localStorage）から取得
+    await startXRGallery(photos, v === "__all__" ? null : v, pal, serverThemes); // 写真推定IPDは xrGallery 内で settings.ts（localStorage）から取得
     statusEl.textContent = `VRセッション終了（${photos.length}枚）`;
   } catch (e) {
     statusEl.textContent = `VR起動失敗: ${e}`;
@@ -159,6 +181,7 @@ vrBtn.addEventListener("click", async () => {
 
 (async () => {
   try {
+    await resolveTheme(); // 2Dビューアの背景(V1)等に使う pal を先に解決
     allPhotos = await fetchPhotos();
     populateAlbums(allPhotos);
     renderFiltered();

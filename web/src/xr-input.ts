@@ -1,6 +1,7 @@
 // WebXR 入力: コントローラ（選択レイ・グリップ）と移動（左スティック=スムース移動、右スティック=スナップターン）
 // PLAN §6 の xr-input 相当。M1: 歩き回り + レイ選択。
 import * as THREE from "three";
+import type { Palette } from "./theme";
 
 export interface ControllerRig {
   controllers: THREE.Group[];
@@ -8,7 +9,7 @@ export interface ControllerRig {
   dispose(): void;
 }
 
-export function createControllerRig(renderer: THREE.WebGLRenderer, player: THREE.Group): ControllerRig {
+export function createControllerRig(renderer: THREE.WebGLRenderer, player: THREE.Group, pal: Palette): ControllerRig {
   const controllers: THREE.Group[] = [];
   const grips: THREE.Group[] = [];
   const sources = new Map<THREE.Group, XRInputSource>();
@@ -20,7 +21,7 @@ export function createControllerRig(renderer: THREE.WebGLRenderer, player: THREE
       new THREE.Vector3(0, 0, 0),
       new THREE.Vector3(0, 0, -1),
     ]);
-    const rayMat = new THREE.LineBasicMaterial({ color: 0x9db8ff, transparent: true, opacity: 0.7 });
+    const rayMat = new THREE.LineBasicMaterial({ color: new THREE.Color(pal.ray), transparent: true, opacity: 0.7 });
     owned.push(rayGeo, rayMat);
     const ray = new THREE.Line(rayGeo, rayMat);
     ray.name = "ray";
@@ -33,7 +34,7 @@ export function createControllerRig(renderer: THREE.WebGLRenderer, player: THREE
 
     const grip = renderer.xr.getControllerGrip(i);
     const boxGeo = new THREE.BoxGeometry(0.035, 0.035, 0.11);
-    const boxMat = new THREE.MeshBasicMaterial({ color: 0x39404c });
+    const boxMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(pal.hitBox) });
     owned.push(boxGeo, boxMat);
     grip.add(new THREE.Mesh(boxGeo, boxMat));
     player.add(grip);

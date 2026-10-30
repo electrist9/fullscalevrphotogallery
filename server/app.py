@@ -25,6 +25,7 @@ CERT_DIR = os.path.join(ROOT, "certs")
 CRT = os.path.join(CERT_DIR, "server.crt")
 KEY = os.path.join(CERT_DIR, "server.key")
 WEB_DIST = os.path.join(ROOT, "web", "dist")
+THEME_DIR = os.path.join(ROOT, "themes")  # テーマJSON格納（THEME_DESIGN.md §6.5）。内蔵plainはここに置かない
 
 app = FastAPI(title="FullScaleVR Photo Gallery M0")
 app.add_middleware(
@@ -119,6 +120,30 @@ def list_albums():
         ]
     finally:
         con.close()
+
+
+@app.get("/api/themes")
+def list_themes():
+    """サーバ配信テーマ一覧（THEME_DESIGN.md §6.5）。themes/*.json を1ファイル=1テーマとして読む。
+    id/base/accent が揃わないファイルはスキップ。内蔵 plain は含まない（クライアント既定）。"""
+    if not os.path.isdir(THEME_DIR):
+        return []
+    out = []
+    for fn in sorted(os.listdir(THEME_DIR)):
+        if not fn.lower().endswith(".json"):
+            continue
+        path = os.path.join(THEME_DIR, fn)
+        try:
+            with open(path, "r", encoding="utf-8-sig") as f:
+                spec = json.load(f)
+        except (OSError, ValueError):
+            continue
+        if not isinstance(spec, dict):
+            continue
+        if not (spec.get("id") and spec.get("base") and spec.get("accent")):
+            continue
+        out.append(spec)
+    return out
 
 
 @app.get("/api/photos/{pid}")

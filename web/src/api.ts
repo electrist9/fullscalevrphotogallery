@@ -1,3 +1,5 @@
+import type { ThemeSpec } from "./theme";
+
 export interface FaceInfo {
   bbox: [number, number, number, number];
   pupil_px: number | null;
@@ -63,6 +65,14 @@ export async function reindex(force = true): Promise<{ started: boolean; running
 
 export async function fetchIndexProgress(): Promise<IndexProgress> {
   const res = await fetch("/api/index/progress");
+  if (!res.ok) throw new Error(`API error ${res.status}`);
+  return res.json();
+}
+
+// サーバ配信テーマ一覧（THEME_DESIGN.md §6.5）。内蔵 plain は含まれない。
+// ピッカー列挙と起動時の名前解決の両方で使う（単一フェッチ）。
+export async function fetchThemes(): Promise<ThemeSpec[]> {
+  const res = await fetch("/api/themes");
   if (!res.ok) throw new Error(`API error ${res.status}`);
   return res.json();
 }
