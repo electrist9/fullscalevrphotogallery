@@ -1,11 +1,11 @@
 # TODO.md — 残作業・未決事項
 
-> 最終更新: 2026-10-30（main @ `a5887ca`）。完了済み項目は PLAN.md §2 変更履歴と PROJECT_STATE.md §2 を参照（这里是「やっていないこと」だけ）。
+> 最終更新: 2026-10-30（オフライン配布形式完了・`feature/offline-dist`）。完了済み項目は PLAN.md §2 変更履歴と PROJECT_STATE.md §2 を参照（这里是「やっていないこと」だけ）。
 
 ## 1. M4「品質・配布」（進行中・次のマイルストーン）
 
 PLAN.md §7 の M4 完了条件: **「初回セットアップ30分以内で動く」**。
-**配布方針（2026-10-29 ユーザー決定）**: セルフホスト配布（LAN限定・認証なしの stance 不変。インターネット公開は対象外）。チャネルは **GitHubリポジトリ＋zipパッケージ** の両方。ライセンス **MIT**。README **日本語のみ**。zipは**スリム**（ソース＋models/＋ビルド済み web/dist＋セットアップスクリプト。ユーザーは Python 3.12 を導入済みであることが前提）。
+**配布方針（2026-10-29 ユーザー決定）**: セルフホスト配布（LAN限定・認証なしの stance 不変。インターネット公開は対象外）。チャネルは **GitHubリポジトリ＋zipパッケージ** の両方。ライセンス **MIT**。README **日本語のみ**。**配布形式変更（2026-10-30 ユーザー決定）**: zip に **Python ランタイムと fsvg.exe を同梱**し、「**展開して fsvg.exe を実行するだけ**（インターネットオフラインでセットアップ完結）」。Python 導入は不要になった。
 
 - [x] 公開前掃除（`Photos/_stress/` 削除・webxr-test 遺物削除・stale修正・テスト修正）→ `bc4a071` で完了。
 - [x] **`scripts/setup.ps1` 実装**（初回セットアップ自動化）→ feature/m4-distribution で完了。Python 3.12 検出（`py -3.12`→`python -V`、無ければ案内）、`.venv` 作成、`pip install --disable-pip-version-check`、`setup-cert.ps1` 実行、`web/dist` 無ければ Node 自動DL→ビルド。スモークテスト済み（冪等経路 exit 0）。
@@ -17,7 +17,8 @@ PLAN.md §7 の M4 完了条件: **「初回セットアップ30分以内で動�
   - `Photos/calib/1.png`: 実測 161cm → 表示 1.63m（pupil_px 231.7・server height_mm 1630.7）誤差 **+1.24%**
   - `Photos/calib/2.png`: 実測 158cm → 表示 1.58m（pupil_px 210.8・server height_mm 1583.5）誤差 **0.00%**
   - `Photos/calib/3.png`: 実測 164cm → 表示 1.65m（pupil_px 222.5・server height_mm 1652.7）誤差 **+0.61%**
-- [ ] GitHub リポジトリ作成・push・Release に zip 添付（GitHub アカウントはユーザー所有。push 認証手段をその時点で確認）。
+- [x] **オフライン配布形式（2026-10-30 ユーザー要望）**: zip 展開→`fsvg.exe` ダブルクリックだけで起動（Python 不要・オフライン可）→ `feature/offline-dist` で完了。`build-runtime.ps1`（tools\pyruntime 406MB・import検証OK）／`launcher.cs`+`build-launcher.ps1`（csc.exe→fsvg.exe）／`run.ps1`（runtime\python.exe 解決・初回証明書自動生成・Quest URL表示・`-Check`）／`make-release.ps1` 改修（runtime・fsvg.exe・mkcert.exe 同梱）／`setup.ps1`・`start-server.ps1`・README 更新。**zip 160.4MB**（従来 11.3MB。GitHub Release 上限 2GB 内）。
+- [ ] GitHub リポジトリ作成・push・Release に zip 添付（**ユーザーが手動実施（2026-10-30 決定）**。手順済み: `git remote add origin https://github.com/electrist9/fullscalevrphotogallery.git` → `git push -u origin main` → Release `v0.9.0` に `release\fsvg-v0.9.0.zip`（160.4MB）添付）。
 - 備考: 性能予算（PLAN §7）のテクスチャ/LRU 対策は M3 で実装済み（LRU 48・ウィンドウ生成・1000枚実機OK）。差分インデックスも前倒し済み。M4 で残るのは主にドキュメント・配布自動化と正式検証。
 
 ## 2. 未決事項（PLAN.md §10 で唯一未決 — ユーザーの決定待ち）

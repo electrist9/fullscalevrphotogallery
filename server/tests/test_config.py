@@ -36,6 +36,15 @@ def test_valid_port():
         os.remove(p)
 
 
+def test_bom_utf8_config_reads():
+    # BOM 付き UTF-8（PowerShell 5.1 の Set-Content -Encoding UTF8 等で保存されることがある）でも読める
+    p = _write("\ufeff" + json.dumps({"port": 9444}))
+    try:
+        assert config.load_config(p)["port"] == 9444
+    finally:
+        os.remove(p)
+
+
 def test_out_of_range_falls_back():
     for bad in (0, 99999):
         p = _write(json.dumps({"port": bad}))

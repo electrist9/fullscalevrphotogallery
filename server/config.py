@@ -34,7 +34,9 @@ def load_config(path: str = CONFIG_PATH) -> dict:
     """
     cfg: dict = {}
     try:
-        with open(path, encoding="utf-8") as f:
+        # utf-8-sig: BOM 付き UTF-8（PowerShell の Set-Content -Encoding UTF8 や一部エディタで
+        # 保存されることがある）でも読めるようにする。BOM なし UTF-8 もそのまま読める。
+        with open(path, encoding="utf-8-sig") as f:
             loaded = json.load(f)
         if isinstance(loaded, dict):
             cfg = loaded
