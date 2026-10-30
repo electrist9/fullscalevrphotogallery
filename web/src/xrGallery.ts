@@ -4,11 +4,12 @@
 // 移動: 左スティック=スムース移動、右スティック=スナップターン。
 // 詳細表示中: トリガー=一覧に戻る、右スティック左右=次/前の画像（スナップターン停止）、左Xボタン=情報ラベル表示/非表示（デフォルト非表示）。
 // M3アルバム整理: Photos/サブフォルダ=アルバム。上部チップ行で切替、グリッドは選択中アルバムのみ。
-// XR設定: チップ行末尾の「⚙ 設定」で設定パネルを開く。写真推定IPD（mm）・半身の目の高さ（m）・スクロール速度（rad/s）・詳細表示距離（m: 原寸大全身/原寸大半身/フィット）をボタンで調整・localStorage保存。
+// XR設定: チップ行末尾の「⚙ 設定」で設定パネルを開く（2026-10-30 2画面化）。画面1=一覧（アイコン+ラベル+現在値。行トリガーで編集へ）、
+// 画面2=個別編集（大きな値+範囲バー+±ボタン。戻る/行外トリガーで一覧へ）。写真推定IPD（mm）・半身の目の高さ（m）・スクロール速度（rad/s）・詳細表示距離（m: 原寸大全身/原寸大半身/フィット）を localStorage 保存。
 import * as THREE from "three";
 import type { Photo } from "./api";
 import { planeSizeMm } from "./photoPlane";
-import { getIpdMm, setIpdMm, getEyeLifeM, setEyeLifeM, EYE_LIFE_MIN, EYE_LIFE_MAX, getScrollRadPerSec, setScrollRadPerSec, SCROLL_DEFAULT, SCROLL_MIN, SCROLL_MAX, getDistLifeFullM, setDistLifeFullM, getDistLifeHalfM, setDistLifeHalfM, getDistFitM, setDistFitM, DIST_MIN, DIST_MAX, DIST_LIFE_FULL_DEFAULT, DIST_LIFE_HALF_DEFAULT, DIST_FIT_DEFAULT } from "./settings";
+import { getIpdMm, setIpdMm, getEyeLifeM, setEyeLifeM, EYE_LIFE_DEFAULT, EYE_LIFE_MIN, EYE_LIFE_MAX, getScrollRadPerSec, setScrollRadPerSec, SCROLL_DEFAULT, SCROLL_MIN, SCROLL_MAX, getDistLifeFullM, setDistLifeFullM, getDistLifeHalfM, setDistLifeHalfM, getDistFitM, setDistFitM, DIST_MIN, DIST_MAX, DIST_LIFE_FULL_DEFAULT, DIST_LIFE_HALF_DEFAULT, DIST_FIT_DEFAULT } from "./settings";
 import { createControllerRig, controllerRay, setRayLength, onControllerEvent, Locomotion } from "./xr-input";
 
 const R = 3.4; // パネル配置半径 (m)
@@ -53,7 +54,7 @@ interface Chip {
 interface SettingsButton {
   group: THREE.Group;
   mesh: THREE.Mesh; // userData.action
-  frameMat: THREE.MeshBasicMaterial;
+  frameMat?: THREE.MeshBasicMaterial; // 一覧行は帯をCanvas側で描画するため frame なし（undefined）
   action: string;
 }
 
@@ -62,6 +63,9 @@ interface SettingsPanel {
   bodyCanvas: HTMLCanvasElement;
   bodyTex: THREE.CanvasTexture;
   buttons: SettingsButton[];
+  mode: "list" | "detail"; // 2026-10-30 2画面化: 一覧 / 個別編集
+  detailKey: string | null; // mode=detail の編集対象
+  hoverKey: string | null; // 一覧でレイが当たっている行の action（変化時のみCanvas再描画）
 }
 
 interface Detail {
@@ -603,9 +607,103 @@ export async function startXRGallery(photos: Photo[], initialAlbum: string | nul
   // 2026-10-26 要望: 「半身の目の高さ」(EYE_LIFE) もパネルで変更可（1.00〜2.00m、±1/±5cm、localStorage保存）。
   // 2026-10-28 要望: 「スクロール速度」(0.4〜3.0 rad/s、±0.1/±0.4、localStorage保存) も追加。
   // 2026-10-28 要望: 「詳細表示距離」を 原寸大全身/原寸大半身/フィット の3種追加（0.50〜5.00m、±0.1/±0.5、localStorage保存）。
+  // 2026-10-30 改善: 1画面6行×5ボタン（テキスト約50要素）→ 2画面化。画面1=一覧（アイコン+ラベル+現在値のみ・6行）、
+  // 行トリガーで画面2=個別編集（大きな値+範囲バー+±ボタン5個+戻る）へ。範囲表記はバーで視覚化し、
+  // 上下限到達時はバーの塗り（目盛り）が赤になる。操作系: 一覧の行外=閉じる / 編集画面の行外=一覧へ戻る。
   // IPD/目の高さ/表示距離は次に写真を開いたときから反映、スクロール速度は次フレームから即反映。
-  // 値はボタンで調整（VRにキーボードはない）。変更は次に写真を開いたときから反映（openDetail 時点で ipdMm/eyeLifeM を読む）。
+  // 値はボタンで調整（VRにキーボードはない）。
   let settings: SettingsPanel | null = null;
+
+  // 設定の定義テーブル（一覧/編集の両画面とアクション処理が共通参照）
+  interface SettingDef {
+    key: string;
+    icon: string;
+    label: string;
+    unit: string;
+    min: number;
+    max: number;
+    decimals: number;
+    round: number; // 刻み丸め（0.5 / 0.01 / 0.1）
+    steps: [number, number]; // [小刻み, 大刻み]（アクション minusL/minusS/plusS/plusL で使用）
+    stepLabels: [string, string, string, string]; // ボタン: −大 −小 +小 +大
+    resetLabel: string;
+    hint: string; // 反映タイミング（編集画面のみ表示）
+    get: () => number;
+    apply: (v: number) => void; // クランプ+丸め後に変数と localStorage へ
+    resetValue: () => number;
+    measure?: () => number | null; // 実測（半身の目の高さのみ。null=適用不可）
+  }
+  const clampRound = (v: number, min: number, max: number, round: number) =>
+    Math.min(max, Math.max(min, Math.round(v / round) * round));
+  const settingDefs: SettingDef[] = [
+    {
+      key: "ipd", icon: "👁", label: "写真推定IPD", unit: "mm",
+      min: IPD_MIN, max: IPD_MAX, decimals: 1, round: 0.5,
+      steps: [0.5, 1],
+      stepLabels: ["−1.0", "−0.5", "+0.5", "+1.0"], resetLabel: "初期化",
+      hint: "※ 次に写真を開いたときから反映",
+      get: () => ipdMm,
+      apply: (v) => { ipdMm = clampRound(v, IPD_MIN, IPD_MAX, 0.5); setIpdMm(ipdMm); },
+      resetValue: () => IPD_DEFAULT,
+    },
+    {
+      key: "eye", icon: "↕", label: "半身の目の高さ", unit: "m",
+      min: EYE_LIFE_MIN, max: EYE_LIFE_MAX, decimals: 2, round: 0.01,
+      steps: [0.01, 0.05],
+      stepLabels: ["−5cm", "−1cm", "+1cm", "+5cm"], resetLabel: "実測",
+      hint: "※ 次に写真を開いたときから反映",
+      get: () => eyeLifeM,
+      apply: (v) => { eyeLifeM = clampRound(v, EYE_LIFE_MIN, EYE_LIFE_MAX, 0.01); setEyeLifeM(eyeLifeM); },
+      resetValue: () => EYE_LIFE_DEFAULT,
+      // 2026-10-26 要望: 「実測」= HMDの床からの高さ（local-floor基準のカメラy）を自動入力。
+      // local フォールバック（y≈0）や異常値のときは適用しない。適用後 ±1cm/±5cm で微調整可。
+      measure: () => {
+        const hp = new THREE.Vector3();
+        camera.getWorldPosition(hp);
+        return hp.y > 0.3 ? hp.y : null;
+      },
+    },
+    {
+      key: "scroll", icon: "➡", label: "スクロール速度", unit: "rad/s",
+      min: SCROLL_MIN, max: SCROLL_MAX, decimals: 1, round: 0.1,
+      steps: [0.1, 0.4],
+      stepLabels: ["−0.4", "−0.1", "+0.1", "+0.4"], resetLabel: "初期化",
+      hint: "※ 次フレームから即時反映",
+      get: () => scrollSpeed,
+      apply: (v) => { scrollSpeed = clampRound(v, SCROLL_MIN, SCROLL_MAX, 0.1); setScrollRadPerSec(scrollSpeed); },
+      resetValue: () => SCROLL_DEFAULT,
+    },
+    {
+      key: "distfull", icon: "🧍", label: "原寸大全身の距離", unit: "m",
+      min: DIST_MIN, max: DIST_MAX, decimals: 2, round: 0.01,
+      steps: [0.1, 0.5],
+      stepLabels: ["−0.5", "−0.1", "+0.1", "+0.5"], resetLabel: "初期化",
+      hint: "※ 次に写真を開いたときから反映",
+      get: () => distLifeFullM,
+      apply: (v) => { distLifeFullM = clampRound(v, DIST_MIN, DIST_MAX, 0.01); setDistLifeFullM(distLifeFullM); },
+      resetValue: () => DIST_LIFE_FULL_DEFAULT,
+    },
+    {
+      key: "disthalf", icon: "◐", label: "原寸大半身の距離", unit: "m",
+      min: DIST_MIN, max: DIST_MAX, decimals: 2, round: 0.01,
+      steps: [0.1, 0.5],
+      stepLabels: ["−0.5", "−0.1", "+0.1", "+0.5"], resetLabel: "初期化",
+      hint: "※ 次に写真を開いたときから反映",
+      get: () => distLifeHalfM,
+      apply: (v) => { distLifeHalfM = clampRound(v, DIST_MIN, DIST_MAX, 0.01); setDistLifeHalfM(distLifeHalfM); },
+      resetValue: () => DIST_LIFE_HALF_DEFAULT,
+    },
+    {
+      key: "distfit", icon: "🖼", label: "フィット表示の距離", unit: "m",
+      min: DIST_MIN, max: DIST_MAX, decimals: 2, round: 0.01,
+      steps: [0.1, 0.5],
+      stepLabels: ["−0.5", "−0.1", "+0.1", "+0.5"], resetLabel: "初期化",
+      hint: "※ 次に写真を開いたときから反映",
+      get: () => distFitM,
+      apply: (v) => { distFitM = clampRound(v, DIST_MIN, DIST_MAX, 0.01); setDistFitM(distFitM); },
+      resetValue: () => DIST_FIT_DEFAULT,
+    },
+  ];
 
   const drawSettingsBody = (sp: SettingsPanel) => {
     const c = sp.bodyCanvas;
@@ -613,24 +711,64 @@ export async function startXRGallery(photos: Photo[], initialAlbum: string | nul
     ctx.fillStyle = "rgba(20,22,26,0.92)";
     ctx.fillRect(0, 0, c.width, c.height);
     ctx.textBaseline = "top";
-    // 並び順（2026-10-26 要望 / 2026-10-28 スクロール速度・詳細表示距離3種追加）:
-    // タイトル → 操作説明 → IPD → [IPDボタン行] → 目の高さ → [目の高さボタン行] → スクロール速度 → [速度ボタン行]
-    // → 原寸大全身距離 → [行] → 原寸大半身距離 → [行] → フィット距離 → [行]
-    // ボタン行は Canvas の隙間に重ねて配置（openSettings の y 対応: 1px = bodyH/canvas.height m）
-    ctx.fillStyle = "#e8eaed";
-    ctx.font = "44px system-ui, sans-serif";
-    ctx.fillText("設定", 24, 14);
-    ctx.fillStyle = "#9aa5b1";
-    ctx.font = "28px system-ui, sans-serif";
-    ctx.fillText("ボタンにトリガー=調整 / 他をトリガー=閉じる", 24, 74);
-    ctx.fillStyle = "#dfe3e8";
-    ctx.font = "40px system-ui, sans-serif";
-    ctx.fillText(`写真推定IPD: ${ipdMm.toFixed(1)} mm（50〜80）`, 24, 126);
-    ctx.fillText(`半身の目の高さ: ${eyeLifeM.toFixed(2)} m（1.00〜2.00）`, 24, 300);
-    ctx.fillText(`スクロール速度: ${scrollSpeed.toFixed(1)} rad/s（0.4〜3.0）`, 24, 474);
-    ctx.fillText(`原寸大全身の距離: ${distLifeFullM.toFixed(2)} m（0.50〜5.00）`, 24, 648);
-    ctx.fillText(`原寸大半身の距離: ${distLifeHalfM.toFixed(2)} m（0.50〜5.00）`, 24, 822);
-    ctx.fillText(`フィット表示の距離: ${distFitM.toFixed(2)} m（0.50〜5.00）`, 24, 996);
+    if (sp.mode === "list") {
+      // 画面1: 一覧。行の背景帯（hover で青）は 3D 側、テキストのみ描画。
+      // 1行=86px・上端118px（当たり面 mesh の y 対応: 1px = bodyH/canvas.height m）
+      ctx.fillStyle = "#e8eaed";
+      ctx.font = "44px system-ui, sans-serif";
+      ctx.fillText("設定", 24, 14);
+      ctx.fillStyle = "#9aa5b1";
+      ctx.font = "26px system-ui, sans-serif";
+      ctx.fillText("行にトリガー=編集 / 他をトリガー=閉じる", 24, 72);
+      settingDefs.forEach((d, i) => {
+        const y = 118 + i * 86;
+        // 行の背景帯（hover で青）。Canvas 側に描画するので本文テキストを隠さない（2026-10-30 不具合修正）
+        ctx.fillStyle = sp.hoverKey === `open_${d.key}` ? "#2f6feb" : "rgba(44,48,56,0.55)";
+        ctx.fillRect(26, y, c.width - 52, 78);
+        ctx.fillStyle = "#dfe3e8";
+        ctx.font = "38px system-ui, sans-serif";
+        ctx.fillText(`${d.icon} ${d.label}`, 40, y + 22);
+        ctx.textAlign = "right";
+        ctx.fillStyle = "#ffffff";
+        ctx.font = "44px system-ui, sans-serif";
+        ctx.fillText(`${d.get().toFixed(d.decimals)} ${d.unit}`, c.width - 40, y + 18);
+        ctx.textAlign = "left";
+      });
+    } else {
+      // 画面2: 個別編集。左上150px幅は「戻る」ボタンの空き（3D ボタンを重畳）
+      const d = settingDefs.find((x) => x.key === sp.detailKey)!;
+      ctx.fillStyle = "#e8eaed";
+      ctx.font = "40px system-ui, sans-serif";
+      ctx.fillText(`${d.icon} ${d.label}`, 170, 26);
+      ctx.textAlign = "center";
+      ctx.fillStyle = "#ffffff";
+      ctx.font = "110px system-ui, sans-serif";
+      ctx.fillText(`${d.get().toFixed(d.decimals)} ${d.unit}`, c.width / 2, 95);
+      // 範囲バー: 塗り=下限からの目盛り。上下限到達時は赤（範囲テキストの代替）
+      const v = d.get();
+      const bx = 120;
+      const bw = c.width - 240;
+      const by = 250;
+      const bh = 26;
+      const t = (v - d.min) / (d.max - d.min);
+      ctx.fillStyle = "#2c3038";
+      ctx.fillRect(bx, by, bw, bh);
+      ctx.fillStyle = v <= d.min || v >= d.max ? "#d64545" : "#2f6feb";
+      ctx.fillRect(bx, by, Math.max(6, bw * t), bh);
+      ctx.fillStyle = "#e8eaed";
+      ctx.fillRect(bx + bw * t - 3, by - 8, 6, bh + 16);
+      ctx.font = "24px system-ui, sans-serif";
+      ctx.fillStyle = "#9aa5b1";
+      ctx.textAlign = "left";
+      ctx.fillText(d.min.toFixed(d.decimals), bx, by + 42);
+      ctx.textAlign = "right";
+      ctx.fillText(d.max.toFixed(d.decimals), bx + bw, by + 42);
+      ctx.textAlign = "center";
+      ctx.fillStyle = "#9aa5b1";
+      ctx.font = "26px system-ui, sans-serif";
+      ctx.fillText(d.hint, c.width / 2, c.height - 46);
+      ctx.textAlign = "left";
+    }
     sp.bodyTex.needsUpdate = true;
   };
 
@@ -641,13 +779,14 @@ export async function startXRGallery(photos: Photo[], initialAlbum: string | nul
     settings = null;
   };
 
-  const openSettings = () => {
+  // mode=list: 一覧（行=当たり面+背景帯、トリガーで編集へ） / mode=detail: 個別編集（戻る+±ボタン5個）
+  const openSettings = (mode: "list" | "detail", detailKey?: string) => {
     closeSettings();
     const root = new THREE.Group();
 
     const canvas = document.createElement("canvas");
     canvas.width = 1024;
-    canvas.height = 1152; // 2026-10-28: 詳細表示距離3行の追加で 640→1152（幅1.2m固定なので 1px=0.001172m は不変）
+    canvas.height = mode === "list" ? 640 : 512; // 2026-10-30 2画面化（旧 1152 一枚絵から縮小）
     const tex = new THREE.CanvasTexture(canvas);
     tex.colorSpace = THREE.SRGBColorSpace;
     tex.anisotropy = 4;
@@ -659,101 +798,80 @@ export async function startXRGallery(photos: Photo[], initialAlbum: string | nul
     );
     body.userData.labelTexture = tex; // disposeSubtree で消す
     body.position.y = 0.1;
+    body.renderOrder = 1; // 2026-10-30 不具合修正: 設定パネルは常に最前面。本文を必ず先に描画させる
     root.add(body);
+    const px = bodyH / canvas.height; // 1px のワールドサイズ (m)
+    const top = 0.1 + bodyH / 2; // 本文Canvas上端（root ローカル y）
 
     const buttons: SettingsButton[] = [];
-    const addButtonRow = (defs: [string, string][], y: number) => {
+    const addButton = (text: string, action: string, x: number, y: number, w = 0.2, h = 0.11) => {
+      const g = new THREE.Group();
+      g.position.set(x, y, 0.01); // 本文Canvasの手前に重ねる
+      const frameMat = new THREE.MeshBasicMaterial({ color: 0x2c3038 });
+      const frame = new THREE.Mesh(new THREE.PlaneGeometry(w + 0.03, h + 0.03), frameMat);
+      frame.position.z = -0.006;
+      frame.renderOrder = 2; // 本文(renderOrder=1)より確実に前面。不透明面は深度だけ書き、本文の描画を消さない
+      g.add(frame);
+      const face = new THREE.Mesh(
+        new THREE.PlaneGeometry(w, h),
+        new THREE.MeshBasicMaterial({ color: 0x1d2025 }),
+      );
+      face.userData.action = action;
+      face.renderOrder = 2;
+      g.add(face);
+      const lab = makeLabel(text, w - 0.08);
+      lab.position.z = 0.004;
+      lab.renderOrder = 3; // ボタン面より確実に前面
+      g.add(lab);
+      root.add(g);
+      buttons.push({ group: g, mesh: face, frameMat, action });
+    };
+
+    if (mode === "list") {
+      // 画面1: 行の当たり面のみ（透明 face）。背景帯は drawSettingsBody が Canvas 側に描画し、
+      // hover 変化を render ループが hoverKey として検知して再描画する（2026-10-30 不具合修正: 3D帯が前面で文字を隠していた）
+      settingDefs.forEach((d, i) => {
+        const cy = top - (118 + i * 86 + 43) * px; // 行中心
+        const rowW = bodyW - 0.06;
+        const rowH = 86 * px - 0.008;
+        const g = new THREE.Group();
+        g.position.set(0, cy, 0.005);
+        const face = new THREE.Mesh(
+          new THREE.PlaneGeometry(rowW, rowH),
+          // 2026-10-30 不具合修正: 当たり面のみの透明 mesh。depthWrite:false で本文（renderOrder=1）の
+          // 深度を絶対に潰さない（潰すと本文の深度テストが落ち、その行だけ透けて写真が見える症状が出ていた）。
+          // renderOrder:2 で本文より確実に後着順。raycast は material 設定に依存しないので当たり判定は不変。
+          new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false }),
+        );
+        face.userData.action = `open_${d.key}`;
+        face.renderOrder = 2;
+        g.add(face);
+        root.add(g);
+        buttons.push({ group: g, mesh: face, action: `open_${d.key}` });
+      });
+    } else {
+      // 画面2: 個別編集。左上「戻る」+ 下部に ±ボタン5個（Canvas 上端から px で対応）
+      const d = settingDefs.find((x) => x.key === detailKey)!;
+      addButton("← 戻る", "back", -bodyW / 2 + 0.115, top - 56 * px, 0.16, 0.1);
       const BW = 0.2;
       const BH = 0.11;
       const GAP = 0.035;
+      const fifth = d.measure ? `${d.key}_measure` : `${d.key}_reset`;
+      const defs: [string, string][] = [
+        [d.stepLabels[0], `${d.key}_minusL`],
+        [d.stepLabels[1], `${d.key}_minusS`],
+        [d.stepLabels[2], `${d.key}_plusS`],
+        [d.stepLabels[3], `${d.key}_plusL`],
+        [d.resetLabel, fifth],
+      ];
       const total = defs.length * BW + (defs.length - 1) * GAP;
+      const rowY = top - 380 * px; // 範囲バー（y250〜316）と注記（y466）の間
       defs.forEach(([text, action], i) => {
-        const g = new THREE.Group();
-        g.position.set(-total / 2 + BW / 2 + i * (BW + GAP), y, 0.01); // 本文Canvasの手前に重ねる（ラベル行の隙間に配置）
-        const frameMat = new THREE.MeshBasicMaterial({ color: 0x2c3038 });
-        const frame = new THREE.Mesh(new THREE.PlaneGeometry(BW + 0.03, BH + 0.03), frameMat);
-        frame.position.z = -0.006;
-        g.add(frame);
-        const face = new THREE.Mesh(
-          new THREE.PlaneGeometry(BW, BH),
-          new THREE.MeshBasicMaterial({ color: 0x1d2025 }),
-        );
-        face.userData.action = action;
-        g.add(face);
-        const lab = makeLabel(text, BW - 0.08);
-        lab.position.z = 0.004;
-        g.add(lab);
-        root.add(g);
-        buttons.push({ group: g, mesh: face, frameMat, action });
+        addButton(text, action, -total / 2 + BW / 2 + i * (BW + GAP), rowY, BW, BH);
       });
-    };
-    // ボタン行の y は Canvas 上の隙間に対応（本文中心0.1・bodyH=1.35・上端0.775・1px=0.001172m・キャンバス中心y576）:
-    // 1行目=IPD（y230）、2行目=半身の目の高さ（y408）、3行目=スクロール速度（y576）、
-    // 4〜6行目=詳細表示距離 全身/半身/フィット（y750/924/1098・2026-10-28追加）
-    addButtonRow(
-      [
-        ["−1.0", "ipd_minus1"], // 2026-10-26 要望: 「−1」→「−1.0」表記（0.5刻みと揃える）
-        ["−0.5", "ipd_minus05"],
-        ["+0.5", "ipd_plus05"],
-        ["+1.0", "ipd_plus1"], // 2026-10-26 要望: 「+1」→「+1.0」表記
-        ["初期化", "ipd_reset"],
-      ],
-      0.505,
-    );
-    addButtonRow(
-      [
-        ["−5cm", "eye_minus5"],
-        ["−1cm", "eye_minus1"],
-        ["+1cm", "eye_plus1"],
-        ["+5cm", "eye_plus5"],
-        ["実測", "eye_measure"], // 2026-10-26 要望: 「初期化」→「実測」。HMDの床からの高さを自動入力（local-floor基準）
-      ],
-      0.297,
-    );
-    addButtonRow(
-      [
-        ["−0.4", "scroll_minus04"],
-        ["−0.1", "scroll_minus01"],
-        ["+0.1", "scroll_plus01"],
-        ["+0.4", "scroll_plus04"],
-        ["初期化", "scroll_reset"], // 2026-10-28 要望: ギャラリー連続スクロール速度（rad/s）を調整。変更は次フレームから即反映
-      ],
-      0.1,
-    );
-    // 2026-10-28 要望: 詳細画像の表示距離（m）。全身=sole_y検出、半身=原寸大でsole_yなし、フィット=原寸大不可。
-    // 変更は次に写真を開いたときから反映（openDetail 時点で読む）
-    addButtonRow(
-      [
-        ["−0.5", "distfull_minus05"],
-        ["−0.1", "distfull_minus01"],
-        ["+0.1", "distfull_plus01"],
-        ["+0.5", "distfull_plus05"],
-        ["初期化", "distfull_reset"],
-      ],
-      -0.109,
-    );
-    addButtonRow(
-      [
-        ["−0.5", "disthalf_minus05"],
-        ["−0.1", "disthalf_minus01"],
-        ["+0.1", "disthalf_plus01"],
-        ["+0.5", "disthalf_plus05"],
-        ["初期化", "disthalf_reset"],
-      ],
-      -0.313,
-    );
-    addButtonRow(
-      [
-        ["−0.5", "distfit_minus05"],
-        ["−0.1", "distfit_minus01"],
-        ["+0.1", "distfit_plus01"],
-        ["+0.5", "distfit_plus05"],
-        ["初期化", "distfit_reset"],
-      ],
-      -0.517,
-    );
+    }
 
-    const sp: SettingsPanel = { root, bodyCanvas: canvas, bodyTex: tex, buttons };
+    const sp: SettingsPanel = { root, bodyCanvas: canvas, bodyTex: tex, buttons, mode, detailKey: mode === "detail" ? detailKey ?? null : null, hoverKey: null };
     drawSettingsBody(sp);
 
     // 頭の正面にアンカー（詳細と同じ向き。床基準でなく目の高さに浮かせる）
@@ -762,64 +880,38 @@ export async function startXRGallery(photos: Photo[], initialAlbum: string | nul
     const yaw = player.rotation.y;
     const fwd = new THREE.Vector3(-Math.sin(yaw), 0, -Math.cos(yaw));
     root.position.copy(head).addScaledVector(fwd, SETTINGS_DIST);
-    root.position.y = 1.15; // 6行化（bodyH=1.35）で上端≈1.93m/下端≈0.58m になるよう調整（旧3行・1.38から下げた）
+    root.position.y = 1.35; // 2026-10-30 2画面化: 一覧 bodyH=0.75 で上端≈1.73/下端≈0.98、編集 bodyH=0.6 で上端≈1.65/下端≈1.05
     root.rotation.y = yaw;
     scene.add(root);
     settings = sp;
   };
 
   const applySettingsAction = (action: string) => {
-    if (action.startsWith("ipd_")) {
-      const clamp = (v: number) => Math.min(IPD_MAX, Math.max(IPD_MIN, Math.round(v * 2) / 2));
-      if (action === "ipd_minus1") ipdMm = clamp(ipdMm - 1);
-      else if (action === "ipd_minus05") ipdMm = clamp(ipdMm - 0.5);
-      else if (action === "ipd_plus05") ipdMm = clamp(ipdMm + 0.5);
-      else if (action === "ipd_plus1") ipdMm = clamp(ipdMm + 1);
-      else if (action === "ipd_reset") ipdMm = IPD_DEFAULT;
-      setIpdMm(ipdMm);
-    } else if (action.startsWith("eye_")) {
-      const clamp = (v: number) => Math.min(EYE_LIFE_MAX, Math.max(EYE_LIFE_MIN, Math.round(v * 100) / 100));
-      if (action === "eye_minus5") eyeLifeM = clamp(eyeLifeM - 0.05);
-      else if (action === "eye_minus1") eyeLifeM = clamp(eyeLifeM - 0.01);
-      else if (action === "eye_plus1") eyeLifeM = clamp(eyeLifeM + 0.01);
-      else if (action === "eye_plus5") eyeLifeM = clamp(eyeLifeM + 0.05);
-      else if (action === "eye_measure") {
-        // 2026-10-26 要望: HMDの床からの高さ（local-floor基準のカメラy）を自動入力。
-        // local フォールバック（y≈0）や異常値のときは適用しない。適用後 ±1cm/±5cm で微調整可。
-        const hp = new THREE.Vector3();
-        camera.getWorldPosition(hp);
-        if (hp.y > 0.3) eyeLifeM = clamp(hp.y);
-      }
-      setEyeLifeM(eyeLifeM);
-    } else if (action.startsWith("scroll_")) {
-      // 2026-10-28 要望: ギャラリー連続スクロール速度（rad/s、0.4〜3.0、0.1刻み）。変数は毎フレーム読まれるので次フレームから即反映
-      const clamp = (v: number) => Math.min(SCROLL_MAX, Math.max(SCROLL_MIN, Math.round(v * 10) / 10));
-      if (action === "scroll_minus04") scrollSpeed = clamp(scrollSpeed - 0.4);
-      else if (action === "scroll_minus01") scrollSpeed = clamp(scrollSpeed - 0.1);
-      else if (action === "scroll_plus01") scrollSpeed = clamp(scrollSpeed + 0.1);
-      else if (action === "scroll_plus04") scrollSpeed = clamp(scrollSpeed + 0.4);
-      else if (action === "scroll_reset") scrollSpeed = SCROLL_DEFAULT;
-      setScrollRadPerSec(scrollSpeed);
-    } else if (action.startsWith("distfull_") || action.startsWith("disthalf_") || action.startsWith("distfit_")) {
-      // 2026-10-28 要望: 詳細画像の表示距離（m、0.50〜5.00、±0.1/±0.5）。全身/半身/フィットの3種。
-      // 変数は openDetail で読まれるので、変更は次に写真を開いたときから反映（IPD・目の高さと同じ）
-      const clamp = (v: number) => Math.min(DIST_MAX, Math.max(DIST_MIN, Math.round(v * 100) / 100));
-      const kind = action.slice(4, action.indexOf("_", 4)); // full / half / fit
+    if (action === "back") {
+      openSettings("list");
+      return;
+    }
+    if (action.startsWith("open_")) {
+      openSettings("detail", action.slice(5));
+      return;
+    }
+    const us = action.indexOf("_");
+    const d = us > 0 ? settingDefs.find((x) => x.key === action.slice(0, us)) : undefined;
+    if (!d) return;
+    const op = action.slice(us + 1);
+    if (op === "reset") {
+      d.apply(d.resetValue());
+    } else if (op === "measure") {
+      // 2026-10-26 要望: 「実測」= HMDの床からの高さ（local-floor基準のカメラy）を自動入力
+      const v = d.measure?.();
+      if (v != null) d.apply(v);
+    } else {
       const delta =
-        action.endsWith("minus05") ? -0.5 :
-        action.endsWith("minus01") ? -0.1 :
-        action.endsWith("plus01") ? 0.1 :
-        action.endsWith("plus05") ? 0.5 : 0;
-      if (kind === "full") {
-        distLifeFullM = action.endsWith("reset") ? DIST_LIFE_FULL_DEFAULT : clamp(distLifeFullM + delta);
-        setDistLifeFullM(distLifeFullM);
-      } else if (kind === "half") {
-        distLifeHalfM = action.endsWith("reset") ? DIST_LIFE_HALF_DEFAULT : clamp(distLifeHalfM + delta);
-        setDistLifeHalfM(distLifeHalfM);
-      } else {
-        distFitM = action.endsWith("reset") ? DIST_FIT_DEFAULT : clamp(distFitM + delta);
-        setDistFitM(distFitM);
-      }
+        op === "minusL" ? -d.steps[1] :
+        op === "minusS" ? -d.steps[0] :
+        op === "plusS" ? d.steps[0] :
+        op === "plusL" ? d.steps[1] : 0;
+      d.apply(d.get() + delta);
     }
     if (settings) drawSettingsBody(settings);
   };
@@ -830,6 +922,7 @@ export async function startXRGallery(photos: Photo[], initialAlbum: string | nul
       if (settings) {
         const btnHit = raycastPanel(raycaster, c, settings.buttons.map((b) => b.mesh));
         if (btnHit) applySettingsAction((btnHit.object as THREE.Mesh).userData.action as string);
+        else if (settings.mode === "detail") openSettings("list"); // 2026-10-30: 編集画面の行外トリガー=一覧へ戻る（一覧の行外=閉じるは従来どおり）
         else closeSettings();
         return;
       }
@@ -851,7 +944,7 @@ export async function startXRGallery(photos: Photo[], initialAlbum: string | nul
           return;
         }
         if (obj.userData.settings) {
-          openSettings();
+          openSettings("list");
           return;
         }
         const album = obj.userData.album as string | null;
@@ -968,7 +1061,21 @@ export async function startXRGallery(photos: Photo[], initialAlbum: string | nul
     exitChipFrameMat.color.setHex(hovered.has(exitChipMesh) ? 0x2f6feb : 0x14161a);
     exitChipGroup.scale.setScalar(hovered.has(exitChipMesh) ? 1.06 : 1);
     for (const b of settings?.buttons ?? []) {
-      b.frameMat.color.setHex(hovered.has(b.mesh) ? 0x2f6feb : 0x2c3038);
+      if (b.frameMat) b.frameMat.color.setHex(hovered.has(b.mesh) ? 0x2f6feb : 0x2c3038);
+    }
+    // 2026-10-30 一覧行の hover 帯: Canvas 側描画なので、当たった行が変わったフレームだけ再描画
+    if (settings && settings.mode === "list") {
+      let hk: string | null = null;
+      for (const b of settings.buttons) {
+        if (hovered.has(b.mesh)) {
+          hk = b.action;
+          break;
+        }
+      }
+      if (hk !== settings.hoverKey) {
+        settings.hoverKey = hk;
+        drawSettingsBody(settings);
+      }
     }
 
     renderer.render(scene, camera);
@@ -1102,7 +1209,8 @@ function makeLabel(lines: string[] | string, worldW: number, fontWorldH?: number
   const worldH = fontWorldH ? (fontWorldH * canvas.height) / fontPx : (worldW * canvas.height) / canvas.width;
   const mesh = new THREE.Mesh(
     new THREE.PlaneGeometry(meshW, worldH),
-    new THREE.MeshBasicMaterial({ map: tex, transparent: true }),
+    // depthWrite:false: テキスト平面が深度を書いて他の透明面（設定本文など）を消す事故を防ぐ（2026-10-30）
+    new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthWrite: false }),
   );
   mesh.userData.labelTexture = tex; // disposeSubtree で消す（ownedTextures には入れない）
   return mesh;
