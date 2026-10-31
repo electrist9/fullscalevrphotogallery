@@ -1,6 +1,6 @@
 # PROJECT_STATE.md — プロジェクト現在状態
 
-> 最終更新: 2026-10-31（Asia/Tokyo）／ 対象リポジトリ: `F:\fullscalevrphotogallery`（branch `main`、`feature/add-theme-neon-pink` マージ後。tip SHA は `& PortableGit\bin\git.exe log --oneline -1`。**M4 完了・GitHub 公開済み・M5-1疑似ステレオ設計確定（PLAN §11）・テーマシステム（内蔵plain＋サーバーテーマ7）**）
+> 最終更新: 2026-10-31（Asia/Tokyo）／ 対象リポジトリ: `F:\fullscalevrphotogallery`（branch `main`、`feature/2d-page-tweaks` マージ後。tip SHA は `& PortableGit\bin\git.exe log --oneline -1`。**M4 完了・GitHub 公開済み・M5-1疑似ステレオ設計確定（PLAN §11）・テーマシステム（内蔵plain＋サーバーテーマ7）**）
 > 本ファイルは別セッションのLLMが開発を継続するための状態記録。設計詳細は ARCHITECTURE.md、決定理由は DECISIONS.md、残作業は TODO.md。履歴の正典は PLAN.md（変更履歴セクション）。
 
 ## 1. プロジェクト概要
@@ -21,7 +21,7 @@ PC上の写真フォルダを、Quest 3 の WebXRブラウザ（HMD単体・PC�
 | 領域 | 状態 |
 |---|---|
 | HTTPS起動・immersive-vr セッション | 2026-10-24 OK（mkcert LAN証明書） |
-| 2Dページ（一覧・アルバム選択・VR開始） | OK |
+| 2Dページ（一覧・アルバム選択・VR開始。IPD入力欄なし＝IPD設定はVR設定パネルのみ、「🥽 VRで開く」ボタン目立たせ、マイルストーン表記なし） | 2026-10-31 OK |
 | VRギャラリー: 1段アーク配置＋右スティック連続スクロール（1000枚で「非常に快適」） | 2026-10-28 OK |
 | アルバムサムネイルチップ行（ギャラリー上部、連続スクロール、「すべて (N)」チップ） | 2026-10-28 OK |
 | 詳細表示: 全身（足先床接地＋床折り曲げストリップ）／半身（既定1.45m）／フィット、3モード＋表示距離設定 | OK |

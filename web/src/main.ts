@@ -1,15 +1,13 @@
 import { fetchIndexProgress, fetchPhotos, fetchThemes, reindex, type IndexProgress, type Photo } from "./api";
 import { renderGrid } from "./gallery";
 import { openViewer, type ViewerHandle } from "./photoPlane";
-import { getIpdMm, getThemeName, setIpdMm } from "./settings";
+import { getIpdMm, getThemeName } from "./settings";
 import { PLAIN_PALETTE, buildPalette, type Palette, type ThemeSpec } from "./theme";
 import { startXRGallery } from "./xrGallery";
 
-const ipdInput = document.getElementById("ipd") as HTMLInputElement;
 const albumSel = document.getElementById("albumsel") as HTMLSelectElement;
 const statusEl = document.getElementById("status")!;
 const viewer = document.getElementById("viewer")!;
-ipdInput.value = String(getIpdMm());
 
 let current: Photo | null = null;
 let handle: ViewerHandle | null = null;
@@ -50,16 +48,6 @@ function showPhoto(p: Photo) {
 
 document.getElementById("back")!.addEventListener("click", closeViewer);
 window.addEventListener("keydown", (e) => { if (e.key === "Escape") closeViewer(); });
-
-ipdInput.addEventListener("change", () => {
-  const v = parseFloat(ipdInput.value);
-  if (Number.isFinite(v) && v >= 50 && v <= 80) {
-    setIpdMm(v);
-    if (current) showPhoto(current); // 再計測して張り直し
-  } else {
-    ipdInput.value = String(getIpdMm());
-  }
-});
 
 // M3アルバム: Photos/サブフォルダ=アルバム。セレクトで2D一覧を絞り込む（''=直下）
 let allPhotos: Photo[] = [];
