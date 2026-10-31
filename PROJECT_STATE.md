@@ -1,6 +1,6 @@
 # PROJECT_STATE.md — プロジェクト現在状態
 
-> 最終更新: 2026-10-31（Asia/Tokyo）／ 対象リポジトリ: `F:\fullscalevrphotogallery`（branch **`feature/downscale-toggle`**（main tip `804f947` から作成・**Quest 3 実機確認待ち**。`feature/downscale-delivery` は実機確認 OK 受けて main へマージ済み）。**M4 完了・GitHub 公開済み・M5-1疑似ステレオ設計確定（PLAN §11）・テーマシステム（内蔵plain＋サーバーテーマ7）**）
+> 最終更新: 2026-10-31（Asia/Tokyo）／ 対象リポジトリ: `F:\fullscalevrphotogallery`（branch **`main`**（`feature/downscale-delivery`・`feature/downscale-toggle` は実機確認 OK 受けて main へマージ済み・ブランチ削除済み）。**M4 完了・GitHub 公開済み・M5-1疑似ステレオ設計確定（PLAN §11）・テーマシステム（内蔵plain＋サーバーテーマ7）**）
 > 本ファイルは別セッションのLLMが開発を継続するための状態記録。設計詳細は ARCHITECTURE.md、決定理由は DECISIONS.md、残作業は TODO.md。履歴の正典は PLAN.md（変更履歴セクション）。
 
 ## 1. プロジェクト概要
@@ -31,8 +31,8 @@ PC上の写真フォルダを、Quest 3 の WebXRブラウザ（HMD単体・PC�
 | 床グリッド Z-fighting 修正（grid y=0.001）、床接地ガイド帯の廃止 | 2026-10-29 OK |
 | config.json 設定3項目: `port` / `photos_root` / `album_mode` | 2026-10-29 OK |
 | テーマシステム（内蔵plain＋サーバーテーマ7: Cool/Forest/Neon/Neon Pink/Noir/Violet/Warm。`themes/*.json`・JSON追加のみで反映。2Dビューア背景はページ読み込み時のみ解決＝テーマ切替後はリロードで反映） | 2026-10-31 OK |
-| 配信時ダウンスケール（`/photos` が StaticFiles → ルート化。長辺 2560px 超過の jpg/png/webp/bmp は配信時に JPEG q85 化・`downscale_cache_dir` にキャッシュ。gif と上限内は原画そのまま。クライアント変更なし） | 2026-10-31 OK（feature/downscale-delivery・main マージ済み） |
-| 配信時ダウンスケール ON/OFF（config.json `downscale_enabled`、既定 true。false で原画そのまま配信） | **実機確認待ち**（feature/downscale-toggle） |
+| 配信時ダウンスケール（`/photos` が StaticFiles → ルート化。長辺 2560px 超過の jpg/png/webp/bmp は配信時に JPEG q85 化・`downscale_cache_dir` にキャッシュ。gif と上限内は原画そのまま。クライアント変更なし。大きい写真での Quest 3 ブラウザ不安定（クラッシュ）も解消） | 2026-10-31 OK（feature/downscale-delivery・main マージ済み） |
+| 配信時ダウンスケール ON/OFF（config.json `downscale_enabled`、既定 true。false で原画そのまま配信） | 2026-10-31 OK（feature/downscale-toggle・main マージ済み） |
 
 ## 3. 現在の設定（`config.json`、コミット済み・シークレット無し）
 
