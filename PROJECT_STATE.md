@@ -1,6 +1,6 @@
 # PROJECT_STATE.md — プロジェクト現在状態
 
-> 最終更新: 2026-10-31（Asia/Tokyo）／ 対象リポジトリ: `F:\fullscalevrphotogallery`（branch **`main`**（`feature/downscale-delivery`・`feature/downscale-toggle` は実機確認 OK 受けて main へマージ済み・ブランチ削除済み）。**M4 完了・GitHub 公開済み・M5-1疑似ステレオ設計確定（PLAN §11）・テーマシステム（内蔵plain＋サーバーテーマ7）・v1.0.0 リリース zip 作成済み（2026-10-31、タグ `v1.0.0` ローカル）**）
+> 最終更新: 2026-10-31（Asia/Tokyo）／ 対象リポジトリ: `F:\fullscalevrphotogallery`（branch **`main`**（`feature/downscale-delivery`・`feature/downscale-toggle` は実機確認 OK 受けて main へマージ済み・ブランチ削除済み）。**M4 完了・GitHub 公開済み・M5-1疑似ステレオ設計確定（PLAN §11）・テーマシステム（内蔵plain＋サーバーテーマ7）・v1.0.0 リリース公開済み（2026-10-31、GitHub Release `v1.0.0`＋タグ push 済み）**）
 > 本ファイルは別セッションのLLMが開発を継続するための状態記録。設計詳細は ARCHITECTURE.md、決定理由は DECISIONS.md、残作業は TODO.md。履歴の正典は PLAN.md（変更履歴セクション）。
 
 ## 1. プロジェクト概要
@@ -14,7 +14,7 @@ PC上の写真フォルダを、Quest 3 の WebXRブラウザ（HMD単体・PC�
 
 ## 2. 現在の到達点（すべて Quest 3 実機確認済み）
 
-マイルストーン（PLAN.md §7）: **M0・M1・M2・M3・M4 完了（2026-10-30）**。M4（品質・配布）の内容: 公開前掃除、配布物一式（`scripts/setup.ps1`／README.md（日本語）／LICENSE（MIT）／`scripts/make-release.ps1`）、**§9-3 実機 ±5% 検証 PASS（2026-10-30、3/3・最大誤差 +1.24%、`Photos/calib/1〜3.png`）**、**オフライン配布形式（2026-10-30、feature/offline-dist）**: zip に Python ランタイム（`runtime\`、tools\pyruntime 406MB）と `fsvg.exe`（csc.exe ビルドのランチャー）と mkcert.exe を同梱し、「展開して fsvg.exe をダブルクリックだけ・オフライン完結」に変更（zip 160.4MB。詳細は PLAN.md 変更履歴）、**GitHub 公開（2026-10-30・ユーザー手動実施）**: `https://github.com/electrist9/fullscalevrphotogallery` に main push ＋ Release `v0.9.0` に zip 添付済み（`scripts/publish-github.ps1` は未使用でリポジトリに残置）。30分実測はサンドボックス権限問題でスキップ記録（TODO.md §1）。**M5-1（疑似ステレオ表示）設計確定（2026-10-30・PLAN.md §11）、実装未着手**。M5-2以降（実ステレオペア・お気に入り）は未設計。EXIF深度補正・動画は対象外（2026-10-30決定）。**v1.0.0 リリース zip（2026-10-31）**: `release/fsvg-v1.0.0.zip`（160.4MB、オフライン配布形式は v0.9.0 と同一——`runtime\`（Python 3.12.14・8153ファイル）＋`fsvg.exe`＋`tools\mkcert.exe` 同梱、git追跡55ファイル＋web/dist（`index-Xx8QoWiT.js` 504.73kB）。web/distは再ビルドで現行ソースとハッシュ一致確認。pytest 36 passed。zip展開後のランタイムで fastapi/uvicorn/mediapipe/PIL/numpy import スモーク OK。注釈タグ `v1.0.0` を HEAD（169ef05・downscale-toggle マージ）に作成済み・未push。GitHub Release への zip 添付はユーザー手動）。
+マイルストーン（PLAN.md §7）: **M0・M1・M2・M3・M4 完了（2026-10-30）**。M4（品質・配布）の内容: 公開前掃除、配布物一式（`scripts/setup.ps1`／README.md（日本語）／LICENSE（MIT）／`scripts/make-release.ps1`）、**§9-3 実機 ±5% 検証 PASS（2026-10-30、3/3・最大誤差 +1.24%、`Photos/calib/1〜3.png`）**、**オフライン配布形式（2026-10-30、feature/offline-dist）**: zip に Python ランタイム（`runtime\`、tools\pyruntime 406MB）と `fsvg.exe`（csc.exe ビルドのランチャー）と mkcert.exe を同梱し、「展開して fsvg.exe をダブルクリックだけ・オフライン完結」に変更（zip 160.4MB。詳細は PLAN.md 変更履歴）、**GitHub 公開（2026-10-30・ユーザー手動実施）**: `https://github.com/electrist9/fullscalevrphotogallery` に main push ＋ Release `v0.9.0` に zip 添付済み（`scripts/publish-github.ps1` は未使用でリポジトリに残置）。30分実測はサンドボックス権限問題でスキップ記録（TODO.md §1）。**M5-1（疑似ステレオ表示）設計確定（2026-10-30・PLAN.md §11）、実装未着手**。M5-2以降（実ステレオペア・お気に入り）は未設計。EXIF深度補正・動画は対象外（2026-10-30決定）。**v1.0.0 リリース zip（2026-10-31）**: `release/fsvg-v1.0.0.zip`（160.4MB、オフライン配布形式は v0.9.0 と同一——`runtime\`（Python 3.12.14・8153ファイル）＋`fsvg.exe`＋`tools\mkcert.exe` 同梱、git追跡55ファイル＋web/dist（`index-Xx8QoWiT.js` 504.73kB）。web/distは再ビルドで現行ソースとハッシュ一致確認。pytest 36 passed。zip展開後のランタイムで fastapi/uvicorn/mediapipe/PIL/numpy import スモーク OK。注釈タグ `v1.0.0` は HEAD（169ef05・downscale-toggle マージ）に作成、**GitHub Release `v1.0.0` に zip 添付・タグ込みで push 済み（2026-10-31・ユーザー手動）**。
 
 実機確認済みの機能（詳細履歴は PLAN.md §2 変更履歴、各項目に「Quest 3 実機確認（日付、OK）」サブ項目あり）:
 
