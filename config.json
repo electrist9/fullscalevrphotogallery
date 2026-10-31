@@ -2,5 +2,6 @@
   "port": 8443,
   "photos_root": "Photos",
   "album_mode": 2,
-  "downscale_cache_dir": "data/downscale"
+  "downscale_cache_dir": "data/downscale",
+  "downscale_enabled": true
 }
