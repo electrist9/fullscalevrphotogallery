@@ -193,6 +193,7 @@ def thumb(pid: int):
 
 
 # 元写真配信（2026-10-31: 旧 StaticFiles マウントの代替。配信時ダウンスケール付き）。
+# config.json の downscale_enabled=false でダウンスケール無効（原画そのまま配信）。
 # 同期 def のため FastAPI のスレッドプールで実行され、Pillow 処理（23MP で約0.3秒）が
 # イベントループ（API・サムネイル配信）をブロックしない。
 _PHOTO_CACHE_HEADERS = {"Cache-Control": "public, max-age=300"}
@@ -208,7 +209,7 @@ def serve_photo(rel: str):
     if not os.path.isfile(target):
         raise HTTPException(404, "not found")
     ext = os.path.splitext(target)[1].lower()
-    if ext in downscale.SUPPORTED_EXTS:
+    if _CFG["downscale_enabled"] and ext in downscale.SUPPORTED_EXTS:
         size = downscale.probe_size(target)
         if size and max(size) > config.DOWNSCALE_MAX_PX:
             cache_dir = _CFG["downscale_cache_dir"]

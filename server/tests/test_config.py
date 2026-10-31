@@ -218,6 +218,42 @@ def test_downscale_cache_dir_inside_photos_root_falls_back():
             os.remove(p)
 
 
+# ---- downscale_enabled（配信時ダウンスケール ON/OFF・2026-10-31） ----
+
+def test_real_config_file_has_downscale_enabled():
+    # リポジトリ直下の config.json は downscale_enabled を持つ（フォールバックせず読める）
+    with open(config.CONFIG_PATH, encoding="utf-8") as f:
+        raw = json.load(f)
+    assert raw.get("downscale_enabled") is True
+    assert config.load_config()["downscale_enabled"] is True
+
+
+def test_downscale_enabled_default():
+    p = _write(json.dumps({"port": 8443}))
+    try:
+        assert config.load_config(p)["downscale_enabled"] is True
+    finally:
+        os.remove(p)
+
+
+def test_downscale_enabled_false():
+    p = _write(json.dumps({"downscale_enabled": False}))
+    try:
+        assert config.load_config(p)["downscale_enabled"] is False
+    finally:
+        os.remove(p)
+
+
+def test_downscale_enabled_invalid_falls_back():
+    # 真偽値以外は日本語警告を出して既定 true（文字列 "false" も無効化しない）
+    for bad in ("false", "true", 1, 0, None):
+        p = _write(json.dumps({"downscale_enabled": bad}))
+        try:
+            assert config.load_config(p)["downscale_enabled"] is True
+        finally:
+            os.remove(p)
+
+
 # ---- album_for_rel（アルバムキー導出） ----
 
 def test_album_for_rel_mode1():
