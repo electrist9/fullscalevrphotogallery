@@ -1,6 +1,6 @@
 # PROJECT_STATE.md — プロジェクト現在状態
 
-> 最終更新: 2026-10-30（Asia/Tokyo）／ 対象リポジトリ: `F:\fullscalevrphotogallery`（branch `main`、`feature/add-themes` マージ後。tip SHA は `& PortableGit\bin\git.exe log --oneline -1`。**M4 完了・GitHub 公開済み・M5-1疑似ステレオ設計確定（PLAN §11）・テーマシステム（内蔵plain＋サーバーテーマ6）**）
+> 最終更新: 2026-10-31（Asia/Tokyo）／ 対象リポジトリ: `F:\fullscalevrphotogallery`（branch `main`、`feature/add-theme-neon-pink` マージ後。tip SHA は `& PortableGit\bin\git.exe log --oneline -1`。**M4 完了・GitHub 公開済み・M5-1疑似ステレオ設計確定（PLAN §11）・テーマシステム（内蔵plain＋サーバーテーマ7）**）
 > 本ファイルは別セッションのLLMが開発を継続するための状態記録。設計詳細は ARCHITECTURE.md、決定理由は DECISIONS.md、残作業は TODO.md。履歴の正典は PLAN.md（変更履歴セクション）。
 
 ## 1. プロジェクト概要
@@ -30,7 +30,7 @@ PC上の写真フォルダを、Quest 3 の WebXRブラウザ（HMD単体・PC�
 | 退出ボタン 🚪（⚙ の右）、2D→VRアルバム同期、情報パネル Xボタン トグル | OK |
 | 床グリッド Z-fighting 修正（grid y=0.001）、床接地ガイド帯の廃止 | 2026-10-29 OK |
 | config.json 設定3項目: `port` / `photos_root` / `album_mode` | 2026-10-29 OK |
-| テーマシステム（内蔵plain＋サーバーテーマ6: Cool/Forest/Neon/Noir/Violet/Warm。`themes/*.json`・JSON追加のみで反映） | 2026-10-30 OK |
+| テーマシステム（内蔵plain＋サーバーテーマ7: Cool/Forest/Neon/Neon Pink/Noir/Violet/Warm。`themes/*.json`・JSON追加のみで反映。2Dビューア背景はページ読み込み時のみ解決＝テーマ切替後はリロードで反映） | 2026-10-31 OK |
 
 ## 3. 現在の設定（`config.json`、コミット済み・シークレット無し）
 

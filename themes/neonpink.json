@@ -1,0 +1,10 @@
+{
+  "id": "neonpink",
+  "name": "Neon Pink",
+  "base": "#ff1493",
+  "accent": "#00bfff",
+  "vivid": 1.0,
+  "overrides": {
+    "hi": "#88c7dc"
+  }
+}
