@@ -15,11 +15,16 @@ if importlib.util.find_spec("fastapi") is None:  # venv未導入時のみ .pylib
 
 from fastapi import FastAPI, HTTPException, Response  # noqa: E402
 from fastapi.middleware.cors import CORSMiddleware  # noqa: E402
+from fastapi.responses import FileResponse  # noqa: E402
 from fastapi.staticfiles import StaticFiles  # noqa: E402
 
+import config  # noqa: E402
 import db  # noqa: E402
+import downscale  # noqa: E402
 import indexer  # noqa: E402
 import facedetect  # noqa: E402
+
+_CFG = config.load_config()
 
 CERT_DIR = os.path.join(ROOT, "certs")
 CRT = os.path.join(CERT_DIR, "server.crt")
@@ -81,7 +86,7 @@ def _photo_row(con, pid):
         "size_bytes": row[6],
         # 2026-10-26: サムネイルは SQLite BLOB（thumbs表）。ファイル配信をやめ DB から配信
         "thumb_url": f"/thumbs/{row[0]}" if row[7] else None,
-        # relpath をそのまま URL に（StaticFiles がサブフォルダも配信。日本語名のため quote）
+        # relpath をそのまま URL に（/photos/{rel} ルートがサブフォルダも配信。日本語名のため quote）
         "photo_url": f"/photos/{quote(row[2])}",
         "faces": face_list,
     }
@@ -187,8 +192,53 @@ def thumb(pid: int):
     )
 
 
-# 静的配信: 元写真 / フロントエンド（サムネイルは /thumbs/{id} エンドポイントで DB から配信）
-app.mount("/photos", StaticFiles(directory=indexer.PHOTO_DIR), name="photos")
+# 元写真配信（2026-10-31: 旧 StaticFiles マウントの代替。配信時ダウンスケール付き）。
+# 同期 def のため FastAPI のスレッドプールで実行され、Pillow 処理（23MP で約0.3秒）が
+# イベントループ（API・サムネイル配信）をブロックしない。
+_PHOTO_CACHE_HEADERS = {"Cache-Control": "public, max-age=300"}
+
+
+@app.get("/photos/{rel:path}")
+def serve_photo(rel: str):
+    root = indexer.PHOTO_DIR
+    target = os.path.normpath(os.path.join(root, rel.replace("/", os.sep)))
+    # パストラバーサル対策（StaticFiles 相当）。photos_root 自体やその外は不可
+    if target == root or not target.startswith(root + os.sep):
+        raise HTTPException(404, "not found")
+    if not os.path.isfile(target):
+        raise HTTPException(404, "not found")
+    ext = os.path.splitext(target)[1].lower()
+    if ext in downscale.SUPPORTED_EXTS:
+        size = downscale.probe_size(target)
+        if size and max(size) > config.DOWNSCALE_MAX_PX:
+            cache_dir = _CFG["downscale_cache_dir"]
+            cache_file = downscale.cache_path_for(
+                target, rel, cache_dir, config.DOWNSCALE_MAX_PX, config.DOWNSCALE_JPEG_QUALITY
+            )
+            if os.path.isfile(cache_file):
+                return FileResponse(cache_file, media_type="image/jpeg", headers=_PHOTO_CACHE_HEADERS)
+            try:
+                data = downscale.render_downscaled(
+                    target, config.DOWNSCALE_MAX_PX, config.DOWNSCALE_JPEG_QUALITY
+                )
+            except (OSError, ValueError) as e:
+                print(f"ダウンスケール変換に失敗したため原画を配信: {target}: {e}")
+                data = None
+            if data is not None:
+                try:
+                    os.makedirs(cache_dir, exist_ok=True)
+                    tmp = f"{cache_file}.{os.getpid()}.tmp"
+                    with open(tmp, "wb") as f:
+                        f.write(data)
+                    os.replace(tmp, cache_file)  # 同時リクエストでも破損しないアトミック差し替え
+                except OSError as e:
+                    print(f"ダウンスケールキャッシュ書込失敗、メモリ内配信: {e}")
+                return Response(content=data, media_type="image/jpeg", headers=_PHOTO_CACHE_HEADERS)
+    media = mimetypes.guess_type(target)[0] or "application/octet-stream"
+    return FileResponse(target, media_type=media, headers=_PHOTO_CACHE_HEADERS)
+
+
+# 静的配信: フロントエンド（元写真は /photos/{rel} ルート、サムネイルは /thumbs/{id} エンドポイント）
 if os.path.isdir(WEB_DIST):
     app.mount("/", StaticFiles(directory=WEB_DIST, html=True), name="web")
 

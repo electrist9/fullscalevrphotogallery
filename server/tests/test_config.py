@@ -154,6 +154,70 @@ def test_album_mode_missing_defaults():
         os.remove(p)
 
 
+# ---- downscale_cache_dir（配信時ダウンスケールキャッシュ先・2026-10-31） ----
+
+def test_real_config_file_has_downscale_cache_dir():
+    # リポジトリ直下の config.json は downscale_cache_dir を持つ（フォールバックせず読める）
+    with open(config.CONFIG_PATH, encoding="utf-8") as f:
+        raw = json.load(f)
+    assert raw.get("downscale_cache_dir") == config.DEFAULT_DOWNSCALE_CACHE_DIR
+    assert config.load_config()["downscale_cache_dir"] == os.path.normpath(
+        os.path.join(ROOT, config.DEFAULT_DOWNSCALE_CACHE_DIR)
+    )
+
+
+def test_downscale_cache_dir_default():
+    p = _write(json.dumps({"port": 8443}))
+    try:
+        assert config.load_config(p)["downscale_cache_dir"] == os.path.normpath(
+            os.path.join(ROOT, config.DEFAULT_DOWNSCALE_CACHE_DIR)
+        )
+    finally:
+        os.remove(p)
+
+
+def test_downscale_cache_dir_relative_resolved_to_root():
+    p = _write(json.dumps({"downscale_cache_dir": ".tmp/alt_ds_cache"}))
+    try:
+        assert config.load_config(p)["downscale_cache_dir"] == os.path.normpath(
+            os.path.join(ROOT, ".tmp", "alt_ds_cache")
+        )
+    finally:
+        os.remove(p)
+
+
+def test_downscale_cache_dir_absolute():
+    target = os.path.join(TMP, "abs_ds_cache")
+    p = _write(json.dumps({"downscale_cache_dir": target}))
+    try:
+        assert config.load_config(p)["downscale_cache_dir"] == os.path.normpath(target)
+    finally:
+        os.remove(p)
+
+
+def test_downscale_cache_dir_invalid_falls_back():
+    for bad in (123, "", "   ", True, None):
+        p = _write(json.dumps({"downscale_cache_dir": bad}))
+        try:
+            assert config.load_config(p)["downscale_cache_dir"] == os.path.normpath(
+                os.path.join(ROOT, config.DEFAULT_DOWNSCALE_CACHE_DIR)
+            )
+        finally:
+            os.remove(p)
+
+
+def test_downscale_cache_dir_inside_photos_root_falls_back():
+    # photos_root 配下だとキャッシュ JPEG をインデックスが写真として拾うため既定値へ
+    for bad in ("Photos", "Photos/ds_cache"):
+        p = _write(json.dumps({"downscale_cache_dir": bad}))
+        try:
+            assert config.load_config(p)["downscale_cache_dir"] == os.path.normpath(
+                os.path.join(ROOT, config.DEFAULT_DOWNSCALE_CACHE_DIR)
+            )
+        finally:
+            os.remove(p)
+
+
 # ---- album_for_rel（アルバムキー導出） ----
 
 def test_album_for_rel_mode1():

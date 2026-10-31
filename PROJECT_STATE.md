@@ -1,6 +1,6 @@
 # PROJECT_STATE.md — プロジェクト現在状態
 
-> 最終更新: 2026-10-31（Asia/Tokyo）／ 対象リポジトリ: `F:\fullscalevrphotogallery`（branch `main`、`feature/2d-page-tweaks` マージ後。tip SHA は `& PortableGit\bin\git.exe log --oneline -1`。**M4 完了・GitHub 公開済み・M5-1疑似ステレオ設計確定（PLAN §11）・テーマシステム（内蔵plain＋サーバーテーマ7）**）
+> 最終更新: 2026-10-31（Asia/Tokyo）／ 対象リポジトリ: `F:\fullscalevrphotogallery`（branch **`feature/downscale-delivery`**（main tip `1cd8519` から作成・**Quest 3 実機確認待ち**）。**M4 完了・GitHub 公開済み・M5-1疑似ステレオ設計確定（PLAN §11）・テーマシステム（内蔵plain＋サーバーテーマ7）**）
 > 本ファイルは別セッションのLLMが開発を継続するための状態記録。設計詳細は ARCHITECTURE.md、決定理由は DECISIONS.md、残作業は TODO.md。履歴の正典は PLAN.md（変更履歴セクション）。
 
 ## 1. プロジェクト概要
@@ -31,6 +31,7 @@ PC上の写真フォルダを、Quest 3 の WebXRブラウザ（HMD単体・PC�
 | 床グリッド Z-fighting 修正（grid y=0.001）、床接地ガイド帯の廃止 | 2026-10-29 OK |
 | config.json 設定3項目: `port` / `photos_root` / `album_mode` | 2026-10-29 OK |
 | テーマシステム（内蔵plain＋サーバーテーマ7: Cool/Forest/Neon/Neon Pink/Noir/Violet/Warm。`themes/*.json`・JSON追加のみで反映。2Dビューア背景はページ読み込み時のみ解決＝テーマ切替後はリロードで反映） | 2026-10-31 OK |
+| 配信時ダウンスケール（`/photos` が StaticFiles → ルート化。長辺 2560px 超過の jpg/png/webp/bmp は配信時に JPEG q85 化・`downscale_cache_dir` にキャッシュ。gif と上限内は原画そのまま。クライアント変更なし） | **実機確認待ち**（feature/downscale-delivery） |
 
 ## 3. 現在の設定（`config.json`、コミット済み・シークレット無し）
 
@@ -38,11 +39,13 @@ PC上の写真フォルダを、Quest 3 の WebXRブラウザ（HMD単体・PC�
 {
   "port": 8443,
   "photos_root": "Photos",
-  "album_mode": 2
+  "album_mode": 2,
+  "downscale_cache_dir": "data/downscale"
 }
 ```
 
 - **`album_mode: 2` はユーザー環境の現運用値**（第一階層ディレクトリのみアルバム）。既定は 1（全ディレクトリ/サブディレクトリ別アルバム）。編集→サーバー再起動で反映、GUIなし。
+- **`downscale_cache_dir`**（2026-10-31 追加・feature/downscale-delivery）: 配信時ダウンスケールのキャッシュ格納先。相対はリポジトリ直下基準、絶対パスも可、必要時に遅延作成。photos_root 配下を指定すると索引に混入するため既定値へフォールバック。上限定数 `DOWNSCALE_MAX_PX=2560`・JPEG品質 85 は `server/config.py` の定数（config.json 項目ではない）。
 - 不正値は日本語警告を出して既定へフォールバック（`server/config.py`）。
 - 非8443ポートに変更した場合、管理者権限で `netsh advfirewall firewall add rule name="FSVR Gallery <ポート>" dir=in action=allow protocol=TCP localport=<ポート>` が必要（既存許可ルールは8443用）。証明書はポート非依存（SANはIP/localhostのみ）で再生成不要。
 
@@ -69,7 +72,7 @@ powershell -File scripts\build-web.ps1           # tools\node\node.exe + pnpm in
 powershell -File scripts\setup-cert.ps1          # tools\mkcert.exe で LAN IP 証明書
 
 # テスト
-.venv\Scripts\python.exe -m pytest server\tests -q   # 2026-10-30 時点: 22 passed
+.venv\Scripts\python.exe -m pytest server\tests -q   # 2026-10-31 時点: 32 passed（test_config 23 / test_scale 5 / test_downscale 4）
 ```
 
 Quest 3 での確認手順（確立済みワークフロー）: PCでサーバー起動 → Questブラウザで `https://192.168.100.25:<port>/` → 2Dページで「VR表示」→ immersive-vr。
@@ -103,13 +106,14 @@ Quest 3 での確認手順（確立済みワークフロー）: PCでサーバ�
 |---|---|
 | `PLAN.md` | 計画書＋変更履歴の正典（§2 変更履歴が最重要。約90KB） |
 | `config.json` | port / photos_root / album_mode（コミット済み） |
-| `server/app.py` | FastAPI エントリ・API・静的配信（`/photos`、`/`→web/dist） |
+| `server/app.py` | FastAPI エントリ・API・静的配信（`/photos/{rel}` ルート=配信時ダウンスケール付き、`/`→web/dist） |
+| `server/downscale.py` | 配信時ダウンスケール支援（probe_size / cache_path_for / render_downscaled。2026-10-31） |
 | `server/config.py` | `load_config()` と `album_for_rel()`（アルバムキー導出の単一実装） |
 | `server/indexer.py` | 走査・差分再インデックス・サムネイル・顔検出実行・進捗 |
 | `server/facedetect.py` | MediaPipe ラッパ（検出チェーン、`DETECT_VERSION`） |
 | `server/db.py` | SQLite スキーマ（`photos`/`faces`）＋ヘルパー |
 | `server/scale.py` | 原寸大スケール計算（mm/px・身長） |
-| `server/tests/` | pytest 22件（test_config 17 / test_scale 5） |
+| `server/tests/` | pytest 32件（test_config 23 / test_scale 5 / test_downscale 4） |
 | `web/src/theme.ts` | テーマパレット定義（`Palette` 30スロット・`buildPalette` で base/accent 2色から導出＋`overrides`） |
 | `themes/*.json` | サーバーテーマ（1ファイル=1テーマ。`list_themes()` がリクエスト毎に読む。追加のみで反映・再起動不要）。作者向け解説は `themes/README.md` |
 | `THEME_DESIGN.md` | テーマ機能の設計（導出ルール・検算） |

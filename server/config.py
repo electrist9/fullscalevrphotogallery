@@ -9,6 +9,9 @@ CONFIG_PATH = os.path.join(ROOT, "config.json")
 DEFAULT_PORT = 8443
 DEFAULT_PHOTOS_ROOT = "Photos"
 DEFAULT_ALBUM_MODE = 1  # 1=全ディレクトリ/サブディレクトリを別アルバム、2=第一階層ディレクトリのみアルバム
+DEFAULT_DOWNSCALE_CACHE_DIR = "data/downscale"  # 配信時ダウンスケールのキャッシュ格納先（2026-10-31）
+DOWNSCALE_MAX_PX = 2560  # 原画の長辺上限(px)。超過写真は配信時にこの長辺へ縮小して JPEG 化（Quest 3 実測検討より）
+DOWNSCALE_JPEG_QUALITY = 85  # 配信時ダウンスケールの JPEG 品質
 
 
 def album_for_rel(rel: str, mode: int = DEFAULT_ALBUM_MODE) -> str:
@@ -31,6 +34,11 @@ def load_config(path: str = CONFIG_PATH) -> dict:
     album_mode: アルバム定義。1=photos_root 配下の全ディレクトリ/サブディレクトリを
     別アルバム（既定・従来動作）、2=第一階層ディレクトリのみアルバム（第二階層
     以下の写真もそのアルバムに含む）。
+
+    downscale_cache_dir: 配信時ダウンスケール（長辺 DOWNSCALE_MAX_PX 超過の原画を
+    JPEG 化して配信）のキャッシュ格納先。相対パスはリポジトリ直下からの相対、
+    絶対パスも可。photos_root 配下を指定した場合は索引に混入するため既定値へ
+    フォールバック。ディレクトリ自体は必要時に遅延作成される。
     """
     cfg: dict = {}
     try:
@@ -70,4 +78,20 @@ def load_config(path: str = CONFIG_PATH) -> dict:
     if not isinstance(album_mode, int) or isinstance(album_mode, bool) or album_mode not in (1, 2):
         print(f"config.json の album_mode が不正なため既定値 {DEFAULT_ALBUM_MODE} を使用: {album_mode!r}")
         album_mode = DEFAULT_ALBUM_MODE
-    return {"port": port, "photos_root": photos_root, "album_mode": album_mode}
+    downscale_cache_dir = cfg.get("downscale_cache_dir", DEFAULT_DOWNSCALE_CACHE_DIR)
+    if not isinstance(downscale_cache_dir, str) or not downscale_cache_dir.strip():
+        print(f"config.json の downscale_cache_dir が不正なため既定値 {DEFAULT_DOWNSCALE_CACHE_DIR!r} を使用: {downscale_cache_dir!r}")
+        downscale_cache_dir = DEFAULT_DOWNSCALE_CACHE_DIR
+    if not os.path.isabs(downscale_cache_dir):
+        downscale_cache_dir = os.path.join(ROOT, downscale_cache_dir)
+    downscale_cache_dir = os.path.normpath(downscale_cache_dir)
+    # キャッシュが photos_root 配下だとインデックスがキャッシュ JPEG を写真として拾ってしまう
+    if downscale_cache_dir == photos_root or downscale_cache_dir.startswith(photos_root + os.sep):
+        print(f"config.json の downscale_cache_dir が photos_root 配下のため既定値 {DEFAULT_DOWNSCALE_CACHE_DIR!r} を使用: {downscale_cache_dir}")
+        downscale_cache_dir = os.path.normpath(os.path.join(ROOT, DEFAULT_DOWNSCALE_CACHE_DIR))
+    return {
+        "port": port,
+        "photos_root": photos_root,
+        "album_mode": album_mode,
+        "downscale_cache_dir": downscale_cache_dir,
+    }
